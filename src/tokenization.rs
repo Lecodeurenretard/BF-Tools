@@ -9,6 +9,10 @@ pub enum Token {
     LoopEnd,
 }
 
+pub enum TokenPairType {    // brackets
+    Loop,
+}
+
 impl Token {
     fn to_corresponding_str(&self) -> String {
         match self {
@@ -23,7 +27,7 @@ impl Token {
         }
     }
     
-    fn tokenize_base_instr(c : char) -> Option<Token> {
+    fn tokenize_basic_instruction_and_loop(c : char) -> Option<Token> {
         match c {
             '>' => Some(Token::MemInc),
             '<' => Some(Token::MemDec),
@@ -37,20 +41,48 @@ impl Token {
         }
     }
     
+    pub fn is_basic_instruction(&self) -> bool {
+        match self {
+            Token::MemInc  => true,
+            Token::MemDec  => true,
+            Token::CellInc => true,
+            Token::CellDec => true,
+            Token::Read    => true,
+            Token::Write   => true,
+            _              => false
+        }
+    }
+    
+    pub fn is_loop(&self) -> bool {
+        match self {
+            Token::LoopStart => true,
+            Token::LoopEnd   => true,
+            _                => false
+        }
+    }
+    
     pub fn tokenize(s : &String) -> Vec<Token> {
         let mut res : Vec<Token> = Vec::new();
         for c in s.chars() {
-            match Token::tokenize_base_instr(c) {
+            match Token::tokenize_basic_instruction_and_loop(c) {
                 Some(token) => res.push(token),
-                None        => ()            // Ignore
+                None        => ()            // this char is a comment
             }
         }
         res
     }
 }
 
+impl std::cmp::PartialEq for Token {
+    fn eq(&self, other : &Self) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other)
+    }
+}
+impl std::cmp::Eq for Token {}
+
+
 impl std::fmt::Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         write!(f, "{}", self.to_corresponding_str())
     }
 }
