@@ -16,7 +16,7 @@ impl Parser {
             paired_brackets: HashMap::new()
         }
     }
-
+    
     fn parse_loop(&mut self) {
         for (i, tok) in self.tokens[self.positon..].iter().enumerate() {
             if *tok == Token::LoopEnd && !self.paired_brackets.contains_key(&(self.positon + i)) {
@@ -29,7 +29,7 @@ impl Parser {
         }
         panic!("A loop is opened but never closed.")
     }
-
+    
     pub fn parse(&mut self) {
         while self.positon < self.tokens.len() {
             let token = &self.tokens[self.positon];

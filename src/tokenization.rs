@@ -1,6 +1,7 @@
+#[derive(Clone)]
 pub enum Token {
-    MemInc,
-    MemDec,
+    MemNext,
+    MemPrev,
     CellInc,
     CellDec,
     Read,
@@ -16,8 +17,8 @@ pub enum TokenPairType {    // brackets
 impl Token {
     fn to_corresponding_str(&self) -> String {
         match self {
-            Token::MemInc       => String::from(">"),
-            Token::MemDec       => String::from("<"),
+            Token::MemNext       => String::from(">"),
+            Token::MemPrev       => String::from("<"),
             Token::CellInc      => String::from("+"),
             Token::CellDec      => String::from("-"),
             Token::Read         => String::from(","),
@@ -29,8 +30,8 @@ impl Token {
     
     fn tokenize_basic_instruction_and_loop(c : char) -> Option<Token> {
         match c {
-            '>' => Some(Token::MemInc),
-            '<' => Some(Token::MemDec),
+            '>' => Some(Token::MemNext),
+            '<' => Some(Token::MemPrev),
             '+' => Some(Token::CellInc),
             '-' => Some(Token::CellDec),
             ',' => Some(Token::Read),
@@ -43,8 +44,8 @@ impl Token {
     
     pub fn is_basic_instruction(&self) -> bool {
         match self {
-            Token::MemInc  => true,
-            Token::MemDec  => true,
+            Token::MemNext  => true,
+            Token::MemPrev  => true,
             Token::CellInc => true,
             Token::CellDec => true,
             Token::Read    => true,
