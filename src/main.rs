@@ -1,5 +1,7 @@
-use std::{env, error::Error, io::Write};
+use std::{error::Error, io::Write};
+use clap::Parser;
 
+use crate::parameters::Parameters;
 use crate::tokenization::Token;
 use crate::compilation::Generator;
 
@@ -10,43 +12,44 @@ mod parameters;
 
 
 
-fn write_assembly(tokens : Vec<Token>) -> Result<(), std::io::Error> {
-    std::fs::create_dir("build")?;
-    let mut output = std::fs::File::create("build/output.asm")?;
+fn write_assembly(generator : Generator, tokens : Vec<Token>, output_file : String) -> Result<(), std::io::Error> {
+    let mut output = std::fs::File::create(output_file)?;
     
     output.write(
-        Generator::gen_init().as_bytes()
+        generator.gen_init().as_bytes()
     )?;
     
     for tok in tokens {
         output.write(
-            Generator::gen_token(tok).as_bytes()
+            generator.gen_token(tok).as_bytes()
         )?;
     }
     
     output.write(
-        Generator::gen_exit().as_bytes()
+        generator.gen_exit().as_bytes()
     )?;
     
     Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>>{
-    let args : Vec<String> = env::args().collect();  //reads command line arguments
-    if args.len() == 1 {    // can't be 0
-        panic!("Missing file argument.");
-    }
+    let arguments = Parameters::parse();
     
-    let contents = std::fs::read_to_string(&args[1])     // same representation as in C, 0th element is the executable's name
+    let contents = std::fs::read_to_string(arguments.get_input_file())     // same representation as in C, 0th element is the executable's name
         .expect("Please provide a correct filename");
     
     let tokens = tokenization::Token::tokenize(&contents);
     let mut parser = parsing::Parser::new(
-        tokens.clone()
+        tokens.clone(),
     );
     
     parser.parse();
     
-    write_assembly(tokens)?;
+    write_assembly(
+        Generator::new(arguments.get_cell_count()),
+        tokens,
+        arguments.get_output_file(),
+    )?;
+    
     Ok(())
 }
