@@ -67,6 +67,9 @@ fn main() -> Result<(), Box<dyn Error>>{
         &output_file_asm,
     )?;
     
+    if arguments.get_compile_only() {
+        return Ok(());
+    }
     let mut pgrm_output : Output;
     
     // assemble the assembly file with as
@@ -79,6 +82,10 @@ fn main() -> Result<(), Box<dyn Error>>{
         .expect("The execution of the 'as' command has failed.");
     check_prgm_output(pgrm_output, "as");
     
+    
+    if arguments.get_assemble_only() {
+        return Ok(());
+    }
     // link the object file with ld
     pgrm_output = Command::new("ld")
         .arg(&output_file_o)
@@ -88,11 +95,18 @@ fn main() -> Result<(), Box<dyn Error>>{
         .expect("The execution of the 'ld' command has failed.");
     check_prgm_output(pgrm_output, "ld");
     
-    // delete the object file
+    // delete the geneated files
     Command::new("rm")
         .arg(output_file_o)
         .output()
         .expect("Can't delete the object file.");
+    
+    if !arguments.get_dbg_enabled() {
+        Command::new("rm")
+            .arg(output_file_asm)
+            .output()
+            .expect("Can't delete the object file.");
+    }
     
     println!(
         "Finished compiling `{}`, the binary executable can be found at `{}`.",

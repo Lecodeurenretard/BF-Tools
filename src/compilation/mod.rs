@@ -12,7 +12,7 @@ impl Generator {
     }
     
     fn check_ptr(_offset : isize) -> String {
-        // not implemented
+        // TODO: not implemented
         String::from(
             ""
         )
