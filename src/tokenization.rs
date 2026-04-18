@@ -62,12 +62,12 @@ impl Token {
         }
     }
     
-    pub fn tokenize(s : &String) -> Vec<Token> {
+    pub fn tokenize(s : &str) -> Vec<Token> {
         let mut res : Vec<Token> = Vec::new();
         for c in s.chars() {
             match Token::tokenize_basic_instruction_and_loop(c) {
                 Some(token) => res.push(token),
-                None        => ()            // this char is a comment
+                None               => ()            // this char is a comment
             }
         }
         res

@@ -1,2 +1,4 @@
 **/target
-**/*.asm
+*.asm
+*.o
+example

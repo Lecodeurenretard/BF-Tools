@@ -17,6 +17,9 @@ pub struct Parameters {
     #[arg(short, long = "output")]
     output_file : Option<String>,
     
+    #[arg(short='g', long="gen-debug")]
+    debug_symbols : bool,
+    
     #[arg(long)]
     #[arg(default_value_t = 128)]
     cell_count : usize,
@@ -40,12 +43,15 @@ impl Parameters {
                 .expect("The file has no '.' in it, the argument 'input_file' is not checked good enough.")
                 .0
                 .to_string()
-                + &String::from(".asm")
         )
     }
     
     pub fn get_cell_count(&self) -> usize {
         self.cell_count
+    }
+    
+    pub fn get_dbg_enabled(&self) -> bool {
+        self.debug_symbols
     }
 }
 
