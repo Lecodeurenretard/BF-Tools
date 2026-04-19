@@ -25,6 +25,11 @@ pub struct Parameters {
     #[arg(short='g', long="gen-debug")]
     debug_symbols : bool,
     
+    /// Prevent the compiler to simplify the program.
+    #[arg(long="no-simplification")]
+    disable_simplification : bool,
+    
+    
     /// The number of cells the program have to allocate.
     #[arg(long)]
     #[arg(default_value_t = 128, value_parser=number_strictly_positive)]
@@ -59,6 +64,10 @@ impl Parameters {
     
     pub fn get_assemble_only(&self) -> bool {
         self.assemble_only
+    }
+    
+    pub fn get_disable_simplification(&self) -> bool {
+        self.disable_simplification
     }
 }
 

@@ -24,13 +24,13 @@ impl Generator {
             "\tlea r8, [rbx + {offset}]\n",
             "{init_err}",
             "\tcmp r12, r8\n",
-            "\tjnbe runtime_error\n",
+            "\tjnbe runtime_error\n",   // jumps if r12 <= r8
             
             // r8, rax, rsi, rdx may change during wmp or jb calls
             "\tlea r8, [rbx + {offset}]\n",
             "{init_err}",
             "\tcmp r8, r13\n",
-            "\tjnbe runtime_error\n",
+            "\tjnbe runtime_error\n",   // same
         ), offset=offset, init_err=self.init_error_throw("OoB"))
     }
     
@@ -73,7 +73,7 @@ impl Generator {
         String::from(concat!(
             "\tmov rax, 0\n",
             "\tmov rdi, 0\n",
-            "\tsub rsp, 8\n",    // reserve 8 byte on the stack (7 unused)
+            "\tsub rsp, 8\n",    // reserve 8 bytes (the size of rsi) on the stack (7 unused)
             "\tmov rsi, rsp\n",  // read() will write 1 byte on the stack
             "\tmov rdx, 1\n",
             "\tsyscall\n",

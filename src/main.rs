@@ -3,7 +3,7 @@ use std::{error::Error, io::Write, process::Command};
 use clap::Parser;
 
 use crate::parameters::Parameters;
-use crate::tokenization::Token;
+use crate::tokenization::{Token, simplify_token_list};
 use crate::compilation::Generator;
 
 mod tokenization;
@@ -56,6 +56,13 @@ fn main() -> Result<(), Box<dyn Error>>{
         tokens.clone(),
     );
     
+    let simplified_tokens : Vec<Token>;
+    if arguments.get_disable_simplification() {
+        simplified_tokens = tokens;
+    } else {
+        simplified_tokens = simplify_token_list(tokens)
+    }
+    
     parser.parse();
     
     let output_file_asm = format!("{}.asm", arguments.get_output_file());
@@ -63,7 +70,7 @@ fn main() -> Result<(), Box<dyn Error>>{
     let output_file     = arguments.get_output_file();
     write_assembly(
         Generator::new(arguments.get_cell_count()),
-        tokens,
+        simplified_tokens,
         &output_file_asm,
     )?;
     

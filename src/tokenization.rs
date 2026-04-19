@@ -87,3 +87,37 @@ impl std::fmt::Display for Token {
         write!(f, "{}", self.to_corresponding_str())
     }
 }
+
+
+pub fn simplify_token_list(mut token_list : Vec<Token>) -> Vec<Token> {
+    fn is_permutation(t1 : (&Token, &Token), t2 : (&Token, &Token)) -> bool {
+        t1 == t2 || t1 == (t2.1, t2.0)
+    }
+    
+    let mut i  = 0;
+    while i < token_list.len() {
+        if i == token_list.len() - 1 {
+            break;
+        }
+        
+        if is_permutation((&token_list[i], &token_list[i+1]), (&Token::CellInc, &Token::CellDec)) {
+            token_list.remove(i);
+            token_list.remove(i);   // removes i+1
+            if i > 0 {
+                i -= 1;  // checks again the previous one
+            }
+            continue;
+        }
+        if is_permutation((&token_list[i], &token_list[i+1]), (&Token::MemNext, &Token::MemPrev)) {
+            token_list.remove(i);
+            token_list.remove(i);
+            if i > 0 {
+                i -= 1;  // checks again the previous one
+            }
+            continue;
+        }
+        
+        i += 1;
+    }
+    token_list
+}
