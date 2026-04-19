@@ -54,5 +54,6 @@ Compile and assemble only, do not link.The generated assembly and object file ar
 
 Compile with debug symbols. Debug symbols allow tools like GDB to run the executable with debigging tools (breakpoints, source assembly, ...).
 
+<!--- None found yet
 ### Undefined behaviors
-- Using `<` or `>` to go out of bounds. Will be fixed.
+-->

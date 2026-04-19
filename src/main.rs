@@ -27,7 +27,7 @@ fn write_assembly(generator : Generator, tokens : Vec<Token>, output_file : &str
     }
     
     output.write(
-        generator.gen_exit().as_bytes()
+        generator.gen_exit(0).as_bytes()
     )?;
     
     Ok(())
