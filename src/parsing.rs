@@ -39,6 +39,7 @@ impl Parser {
                 // hence the fact they can't produce syntax errors
             }
             
+            // doesn't work, will be fixed with a stack
             if token.is_loop() {
                 match token {
                     Token::LoopStart => self.parse_loop(),
