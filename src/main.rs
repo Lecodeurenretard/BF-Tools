@@ -1,8 +1,6 @@
 use std::process::Output;
 use std::{error::Error, io::Write, process::Command};
-use clap::Parser;
-
-use crate::parameters::Parameters;
+use clap::Parser;use crate::parameters::Parameters;
 use crate::tokenization::{Token, simplify_token_list};
 use crate::compilation::Generator;
 

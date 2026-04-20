@@ -43,53 +43,57 @@ impl Generator {
         ), name=name, msg=message)
     }
     
-    fn gen_mem_next(&self) -> String {
-        self.check_ptr(1)
-        + &String::from(
-            "\tadd rbx, 1\n"
+    fn gen_mem_next(&self, count : usize) -> String {
+        self.check_ptr(count as isize)
+        + &format!(
+            "\tadd rbx, {count}\n"
         )
     }
     
-    fn gen_mem_prev(&self) -> String {
-        self.check_ptr(-1) 
-        + &String::from(
-            "\tsub rbx, 1\n"
+    fn gen_mem_prev(&self, count : usize) -> String {
+        self.check_ptr(-(count as isize))
+        + &format!(
+            "\tsub rbx, {count}\n"
         )
     }
     
-    fn gen_cell_inc(&self) -> String {
-        String::from(
-            "\tinc byte ptr [rbx]\n"
+    fn gen_cell_inc(&self, count : usize) -> String {
+        format!(
+            "\tadd byte ptr [rbx], {count}\n"
         )
     }
 
-    fn gen_cell_dec(&self) -> String {
-        String::from(
-            "\tdec byte ptr [rbx]\n"
+    fn gen_cell_dec(&self, count : usize) -> String {
+        format!(
+            "\tsub byte ptr [rbx], {count}\n"
         )
     }
     
-    fn gen_cell_read(&self) -> String {
-        String::from(concat!(
+    fn gen_cell_read(&self, count : usize) -> String {
+        // Calling sys_read on std_in
+        format!(concat!(
             "\tmov rax, 0\n",
             "\tmov rdi, 0\n",
-            "\tsub rsp, 8\n",    // reserve 8 bytes (the size of rsi) on the stack (7 unused)
-            "\tmov rsi, rsp\n",  // read() will write 1 byte on the stack
-            "\tmov rdx, 1\n",
+            "\tsub rsp, {count}\n",    // reserve count bytes (the size of a register) on the stack
+            "\tmov rsi, rsp\n",
+            "\tmov rdx, {count}\n",
             "\tsyscall\n",
-            "\tpop rdx\n",       // the byte written by read() is in dl
-            "\tmov byte [rbx-1], dl\n", // no clue why the -1
-        ))
+            "\tmov dl, [rsp - 1 + {count}]\n",     // the last value entered
+            "\tmov [rbx], dl\n",
+        ), count=count)
+        + &String::from("\tpop rdx\n").repeat(count)    // freeing the stack
     }
     
-    fn gen_cell_write(&self) -> String {
+    fn gen_cell_write(&self, count : usize) -> String {
         String::from(concat!(
             "\tmov rax, 1\n",
             "\tmov rdi, 1\n",
             "\tmov rsi, rbx\n",
             "\tmov rdx, 1\n",
-            "\tsyscall\n",
         ))
+        // registers are preserved
+        // couldn't find any source but works on my machine
+        + &String::from("\tsyscall\n").repeat(count)
     }
     
     fn gen_loop_start(&self) -> String {
@@ -148,7 +152,7 @@ impl Generator {
         ),
             functions=self.predefined_functions(),
             nb_cells=self.cell_count,
-            OoB=self.create_error("OoB", "The memory pointer is out of bounds.")
+            OoB=self.create_error("OoB", "The memory pointer is out of bounds."),
         )
     }
     
@@ -163,14 +167,14 @@ impl Generator {
     
     pub fn gen_token(&self, tok : Token) -> String {
         match tok {
-            Token::MemNext   => self.gen_mem_next(),
-            Token::MemPrev   => self.gen_mem_prev(),
-            Token::CellInc   => self.gen_cell_inc(),
-            Token::CellDec   => self.gen_cell_dec(),
-            Token::Read      => self.gen_cell_read(),
-            Token::Write     => self.gen_cell_write(),
-            Token::LoopStart => self.gen_loop_start(),
-            Token::LoopEnd   => self.gen_loop_end(),
+            Token::MemNext(count)   => self.gen_mem_next(count),
+            Token::MemPrev(count)   => self.gen_mem_prev(count),
+            Token::CellInc(count)   => self.gen_cell_inc(count),
+            Token::CellDec(count)   => self.gen_cell_dec(count),
+            Token::Read(count)      => self.gen_cell_read(count),
+            Token::Write(count)     => self.gen_cell_write(count),
+            Token::LoopStart               => self.gen_loop_start(),
+            Token::LoopEnd                 => self.gen_loop_end(),
         }
     }
 }

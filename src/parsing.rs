@@ -9,14 +9,6 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(tok : Vec<Token>) -> Parser {
-        Parser{
-            tokens: tok,     //moved
-            positon: 0,
-            paired_brackets: HashMap::new()
-        }
-    }
-    
     fn parse_loop(&mut self) {
         for (i, tok) in self.tokens[self.positon..].iter().enumerate() {
             if *tok == Token::LoopEnd && !self.paired_brackets.contains_key(&(self.positon + i)) {
@@ -30,13 +22,21 @@ impl Parser {
         panic!("A loop is opened but never closed.")
     }
     
+    pub fn new(tok : Vec<Token>) -> Parser {
+        Parser{
+            tokens: tok,     //moved
+            positon: 0,
+            paired_brackets: HashMap::new()
+        }
+    }
+    
     pub fn parse(&mut self) {
         while self.positon < self.tokens.len() {
             let token = &self.tokens[self.positon];
             
             if token.is_basic_instruction() {
                 // Basic instructions are only one char
-                // hence the fact they can't be incorrect at compilation
+                // hence the fact they can't produce syntax errors
             }
             
             if token.is_loop() {

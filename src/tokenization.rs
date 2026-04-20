@@ -1,11 +1,13 @@
-#[derive(Clone)]
+use std::cmp::Ordering;
+
+#[derive(Clone, Copy)]
 pub enum Token {
-    MemNext,
-    MemPrev,
-    CellInc,
-    CellDec,
-    Read,
-    Write,
+    MemNext(usize),
+    MemPrev(usize),
+    CellInc(usize),
+    CellDec(usize),
+    Read(usize),
+    Write(usize),
     LoopStart,
     LoopEnd,
 }
@@ -15,27 +17,65 @@ pub enum TokenPairType {    // brackets
 }
 
 impl Token {
+    fn count(&self) -> usize {
+        match self {
+            Token::MemNext(count) => *count,
+            Token::MemPrev(count) => *count,
+            Token::CellInc(count) => *count,
+            Token::CellDec(count) => *count,
+            Token::Read(count)    => *count,
+            Token::Write(count)   => *count,
+            Token::LoopStart              => 1,
+            Token::LoopEnd                => 1,
+        }
+    }
+    
+    fn add(self, n : usize) -> Self {
+        match self {
+            Token::MemNext(count) => Token::MemNext(count + n),
+            Token::MemPrev(count) => Token::MemPrev(count + n),
+            Token::CellInc(count) => Token::CellInc(count + n),
+            Token::CellDec(count) => Token::CellDec(count + n),
+            Token::Read(count)    => Token::Read(count + n),
+            Token::Write(count)   => Token::Write(count + n),
+            Token::LoopStart             => Token::LoopStart,
+            Token::LoopEnd               => Token::LoopEnd,
+        }
+    }
+    fn sub(self, n : usize) -> Self {
+        match self {
+            Token::MemNext(count) => Token::MemNext(count - n),
+            Token::MemPrev(count) => Token::MemPrev(count - n),
+            Token::CellInc(count) => Token::CellInc(count - n),
+            Token::CellDec(count) => Token::CellDec(count - n),
+            Token::Read(count)    => Token::Read(count - n),
+            Token::Write(count)   => Token::Write(count - n),
+            Token::LoopStart             => Token::LoopStart,
+            Token::LoopEnd               => Token::LoopEnd,
+        }
+    }
+    
     fn to_corresponding_str(&self) -> String {
         match self {
-            Token::MemNext       => String::from(">"),
-            Token::MemPrev       => String::from("<"),
-            Token::CellInc      => String::from("+"),
-            Token::CellDec      => String::from("-"),
-            Token::Read         => String::from(","),
-            Token::Write        => String::from("."),
-            Token::LoopStart    => String::from("["),
-            Token::LoopEnd      => String::from("]"),
+            Token::MemNext(_) => String::from(">"),
+            Token::MemPrev(_) => String::from("<"),
+            Token::CellInc(_) => String::from("+"),
+            Token::CellDec(_) => String::from("-"),
+            Token::Read(_)    => String::from(","),
+            Token::Write(_)   => String::from("."),
+            Token::LoopStart  => String::from("["),
+            Token::LoopEnd    => String::from("]"),
         }
     }
     
     fn tokenize_basic_instruction_and_loop(c : char) -> Option<Token> {
         match c {
-            '>' => Some(Token::MemNext),
-            '<' => Some(Token::MemPrev),
-            '+' => Some(Token::CellInc),
-            '-' => Some(Token::CellDec),
-            ',' => Some(Token::Read),
-            '.' => Some(Token::Write),
+            '>' => Some(Token::MemNext(1)),
+            '<' => Some(Token::MemPrev(1)),
+            '+' => Some(Token::CellInc(1)),
+            '-' => Some(Token::CellDec(1)),
+            ',' => Some(Token::Read(1)),
+            '.' => Some(Token::Write(1)),
             '[' => Some(Token::LoopStart),
             ']' => Some(Token::LoopEnd),
             _   => None
@@ -44,13 +84,13 @@ impl Token {
     
     pub fn is_basic_instruction(&self) -> bool {
         match self {
-            Token::MemNext  => true,
-            Token::MemPrev  => true,
-            Token::CellInc => true,
-            Token::CellDec => true,
-            Token::Read    => true,
-            Token::Write   => true,
-            _              => false
+            Token::MemNext(_) => true,
+            Token::MemPrev(_) => true,
+            Token::CellInc(_) => true,
+            Token::CellDec(_) => true,
+            Token::Read(_)    => true,
+            Token::Write(_)   => true,
+            _                 => false
         }
     }
     
@@ -64,10 +104,21 @@ impl Token {
     
     pub fn tokenize(s : &str) -> Vec<Token> {
         let mut res : Vec<Token> = Vec::new();
-        for c in s.chars() {
-            match Token::tokenize_basic_instruction_and_loop(c) {
-                Some(token) => res.push(token),
-                None               => ()            // this char is a comment
+        let mut current_token = Token::CellInc(0);  // will be removed while simplifying
+        for (i, c) in s.chars().enumerate() {
+            let Some(token) = Token::tokenize_basic_instruction_and_loop(c) else {
+                continue;   // The character is just a comment
+            };
+            
+            if token == current_token {
+                current_token = current_token.add(1);
+            } else {
+                res.push(current_token);
+                current_token = token;
+            }
+            if i + 1 == s.chars().collect::<Vec<char>>().len() {
+                res.push(current_token);
+                break;
             }
         }
         res
@@ -89,9 +140,37 @@ impl std::fmt::Display for Token {
 }
 
 
-pub fn simplify_token_list(mut token_list : Vec<Token>) -> Vec<Token> {
+pub fn simplify_token_list(mut token_list : Vec<Token> ) -> Vec<Token> {
     fn is_permutation(t1 : (&Token, &Token), t2 : (&Token, &Token)) -> bool {
         t1 == t2 || t1 == (t2.1, t2.0)
+    }
+    
+    /// Reduce opposites, given that tokens[index_first] and tokens[index_first + 1] are opposites.
+    /// Returns the index from which the iteration should continue
+    fn reduce_opposites(tokens : &mut Vec<Token>, index_first : usize) -> usize {
+        let idex = index_first;     // too long
+        let curr_tok_count = tokens[idex].count();
+        let next_tok_count = tokens[idex + 1].count();
+        
+        match curr_tok_count.cmp(&next_tok_count) {
+            Ordering::Less => {
+                tokens[idex] = Token::CellInc(0);
+                tokens[idex + 1] = tokens[idex + 1].sub(curr_tok_count);
+            }
+            Ordering::Equal => {
+                tokens[idex] = Token::CellInc(0);
+                tokens[idex + 1] = Token::CellInc(0);
+            }
+            Ordering::Greater => {
+                tokens[idex] = tokens[idex].sub(next_tok_count);
+                tokens[idex + 1] = Token::CellInc(0);
+            }
+        }
+        
+        if idex == 0 {
+            return 0;  // checks again the previous one
+        }              // bc for <<-+>> which is reduced to <<>> the program needs to step back to cancel those
+        idex - 1
     }
     
     let mut i  = 0;
@@ -100,20 +179,19 @@ pub fn simplify_token_list(mut token_list : Vec<Token>) -> Vec<Token> {
             break;
         }
         
-        if is_permutation((&token_list[i], &token_list[i+1]), (&Token::CellInc, &Token::CellDec)) {
+        if token_list[i].count() == 0{
             token_list.remove(i);
-            token_list.remove(i);   // removes i+1
-            if i > 0 {
-                i -= 1;  // checks again the previous one
-            }
             continue;
         }
-        if is_permutation((&token_list[i], &token_list[i+1]), (&Token::MemNext, &Token::MemPrev)) {
-            token_list.remove(i);
-            token_list.remove(i);
-            if i > 0 {
-                i -= 1;  // checks again the previous one
-            }
+        
+        
+        // does not compare the count
+        if is_permutation((&token_list[i], &token_list[i+1]), (&Token::CellInc(0), &Token::CellDec(0))) {
+            i = reduce_opposites(&mut token_list, i);
+            continue;
+        }
+        if is_permutation((&token_list[i], &token_list[i+1]), (&Token::MemNext(0), &Token::MemPrev(0))) {
+            i = reduce_opposites(&mut token_list, i);
             continue;
         }
         
