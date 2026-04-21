@@ -121,7 +121,13 @@ impl Token {
                 break;
             }
         }
+        res.remove(0);  // removes the CellInc
         res
+    }
+    
+    /// Compare while taking account of the count
+    pub fn compare(&self, other : Token) -> bool {
+        *self == other && self.count() == other.count()
     }
 }
 
@@ -198,4 +204,29 @@ pub fn simplify_token_list(mut token_list : Vec<Token> ) -> Vec<Token> {
         i += 1;
     }
     token_list
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use crate::tokenization::Token;
+    
+    fn cmp_token_vec(v1 : Vec<Token>, v2 : Vec<Token>) -> bool {
+        for (elem1, elem2) in std::iter::zip(v1, v2) {
+            if !elem1.compare(elem2) {
+                return false;
+            }
+        }
+        true
+    }
+    
+    #[test]
+    fn test_tokenize() {
+        assert!(cmp_token_vec(
+            Token::tokenize("><+-[]"),
+            vec![Token::MemNext(1), Token::MemPrev(1), Token::CellInc(1), Token::CellDec(1), Token::LoopStart, Token::LoopEnd]
+        ));
+        assert!(true);
+    }
 }

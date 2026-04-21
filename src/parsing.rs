@@ -10,6 +10,9 @@ pub struct Parser {
 
 impl Parser {
     fn parse_loop(&mut self) {
+        if self.tokens[self.positon] != Token::LoopStart {
+            panic!("{} {} parse_loop() called while the current token is not a loop start.", self.tokens[self.positon], self.positon);
+        }
         for (i, tok) in self.tokens[self.positon..].iter().enumerate() {
             if *tok == Token::LoopEnd && !self.paired_brackets.contains_key(&(self.positon + i)) {
                 self.paired_brackets.insert(
@@ -19,7 +22,16 @@ impl Parser {
                 return;
             }
         }
-        panic!("A loop is opened but never closed.")
+        panic!("A loop is opened but never closed.");
+    }
+    
+    #[cfg(test)]
+    fn test_new(s : &str) -> Parser {
+        Parser {
+            tokens: Token::tokenize(s),
+            positon: 0,
+            paired_brackets: HashMap::new(),
+        }
     }
     
     pub fn new(tok : Vec<Token>) -> Parser {
@@ -54,5 +66,32 @@ impl Parser {
             
             self.positon += 1;
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::parsing::Parser;
+    
+    #[test]
+    fn test_parse_loop() {
+        Parser::test_new("[]").parse_loop();
+        Parser::test_new("[..,,+-]").parse_loop();
+        Parser::test_new("[[[]]]").parse_loop();
+        Parser::test_new("[.],+[[-+].]").parse_loop();
+        Parser::test_new("[,[.[--].]+]").parse_loop();
+    }
+    
+    #[test]
+    #[should_panic(expected = "never closed")]
+    fn test_parse_loop_no_end() {
+        Parser::test_new("[.+,,").parse_loop();
+    }
+    
+    #[test]
+    fn test_parse() {
+        Parser::test_new("[]").parse();
+        //Parser::test_new("[+-,.[]]").parse();     //TOFIX: loops
     }
 }

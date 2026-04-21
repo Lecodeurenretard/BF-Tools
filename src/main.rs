@@ -1,47 +1,17 @@
-use std::process::Output;
-use std::{error::Error, io::Write, process::Command};
-use clap::Parser;use crate::parameters::Parameters;
+use std::process::{Output, Command};
+use std::error::Error;
+use clap::Parser;
+
+use crate::parameters::Parameters;
 use crate::tokenization::{Token, simplify_token_list};
 use crate::compilation::Generator;
+use crate::other::{write_assembly, check_cmd_output};
 
 mod tokenization;
 mod parsing;
 mod compilation;
 mod parameters;
-
-
-
-fn write_assembly(generator : Generator, tokens : Vec<Token>, output_file : &str) -> Result<(), std::io::Error> {
-    let mut output = std::fs::File::create(output_file)?;
-    
-    output.write(
-        generator.gen_init().as_bytes()
-    )?;
-    
-    for tok in tokens {
-        output.write(
-            generator.gen_token(tok).as_bytes()
-        )?;
-    }
-    
-    output.write(
-        generator.gen_exit(0).as_bytes()
-    )?;
-    
-    Ok(())
-}
-
-fn check_prgm_output(pgrm_output : Output, pgrm_name : &str) {
-    if !pgrm_output.status.success() {
-        let exit_status = pgrm_output.status.code()
-            .expect(&format!("{pgrm_name} was terminated by a signal."));
-        panic!(
-            "{pgrm_name} ended with status {exit_status}, it printed the following errors:\n{}",
-            String::from_utf8(pgrm_output.stderr)
-                .expect(&format!("{pgrm_name} failed and while decoding its output in stderr, an UTF8 error was raised.")),
-        );
-    }
-}
+mod other;
 
 fn main() -> Result<(), Box<dyn Error>>{
     let arguments = Parameters::parse();
@@ -85,7 +55,7 @@ fn main() -> Result<(), Box<dyn Error>>{
         .arg(&output_file_o) //file in [output].o
         .output()
         .expect("The execution of the 'as' command has failed.");
-    check_prgm_output(pgrm_output, "as");
+    check_cmd_output(pgrm_output, "as");
     
     
     if arguments.get_assemble_only() {
@@ -98,17 +68,17 @@ fn main() -> Result<(), Box<dyn Error>>{
         .arg(output_file)
         .output()
         .expect("The execution of the 'ld' command has failed.");
-    check_prgm_output(pgrm_output, "ld");
+    check_cmd_output(pgrm_output, "ld");
     
     // delete the geneated files
     Command::new("rm")
-        .arg(output_file_o)
+        .arg(&output_file_o)
         .output()
         .expect("Can't delete the object file.");
     
     if !arguments.get_dbg_enabled() {
         Command::new("rm")
-            .arg(output_file_asm)
+            .arg(&output_file_asm)
             .output()
             .expect("Can't delete the object file.");
     }

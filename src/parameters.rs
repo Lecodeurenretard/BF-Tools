@@ -37,6 +37,22 @@ pub struct Parameters {
 }
 
 impl Parameters {
+    #[cfg(test)]
+    fn test_new(input : &str, output : Option<&str>) -> Parameters {
+        Parameters {
+            input_file: String::from(input),
+            output_file: match output {
+                Some(out) => Some(String::from(out)),
+                None => None
+            },
+            compile_only: false,
+            assemble_only: false,
+            debug_symbols: false,
+            disable_simplification: false,
+            cell_count: 128,
+        }
+    }
+    
     pub fn get_input_file(&self) -> String {
         self.input_file.clone()
     }
@@ -73,12 +89,18 @@ impl Parameters {
 
 
 fn file_exists(s : &str) -> Result<String, String> {
+    if let Ok(metadata) = std::fs::metadata(s){ // The cases where the function returns an error are handled later
+        if !metadata.is_file() {
+            return Err(String::from("This path does not lead to a file."));
+        }
+    }
+    
     match std::fs::exists(s) {
         Ok(file_exists) => {
             if file_exists {
                 Ok(String::from(s))
             } else {
-                Err(format!("The following file is not found: `{s}`"))
+                Err(format!("File not found: `{s}`."))
             }
         }
         Err(err) => Err(format!("Please verify the permissions of the file `{err}`."))
@@ -100,4 +122,43 @@ fn number_strictly_positive(s : &str) -> Result<usize, String> {
         return Err(format!("{x} is negative or null."));
     }
     Ok(x as usize)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_get_output() {
+        assert_eq!(Parameters::test_new("input.bf"        , None).get_output_file()      , String::from("input"));
+        assert_eq!(Parameters::test_new("input.bf.bf"     , None).get_output_file()      , String::from("input.bf"));
+        assert_eq!(Parameters::test_new("input.out.zip.bf", None).get_output_file()      , String::from("input.out.zip"));
+        assert_eq!(Parameters::test_new("input.bf", Some("out")).get_output_file()       , String::from("out"));
+        assert_eq!(Parameters::test_new("input.bf", Some("out.zip.bf")).get_output_file(), String::from("out.zip.bf"));
+    }
+    
+    #[test]
+    fn test_file_exists() {
+        assert_eq!(file_exists("Cargo.toml"), Ok(String::from("Cargo.toml")));
+        assert!(file_exists("adasdifsds").is_err());
+        assert!(file_exists("src").is_err());
+    }
+    
+    #[test]
+    fn test_file_is_brainfuck() {
+        assert!(file_is_brainfuck("src").is_err());
+        assert!(file_is_brainfuck("src/main.rs").is_err());
+        assert!(file_is_brainfuck("DoesNotExists.bf").is_err());
+        assert_eq!(file_is_brainfuck("examples/hello world.bf").unwrap(), String::from("examples/hello world.bf"));
+    }
+    
+    #[test]
+    fn test_number_strictly_positive() {
+        assert!(number_strictly_positive("0").is_err());
+        for i  in 1..100 {
+            assert_eq!(number_strictly_positive(&i.to_string()).unwrap(), i);
+            assert!(number_strictly_positive(&(-(i as isize)).to_string()).is_err());
+        }
+    }
 }
