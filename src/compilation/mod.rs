@@ -1,4 +1,4 @@
-use crate::tokenization::Token;
+use crate::{parsing::{BasicInstruction, Instruction, Loop}, tokenization::Token};
 
 pub struct Generator {
     cell_count : usize,
@@ -7,7 +7,7 @@ pub struct Generator {
 impl Generator {
     pub fn new(cell_count : usize) -> Generator {
         Generator { 
-            cell_count,
+            cell_count: cell_count,
         }
     }
     
@@ -96,12 +96,20 @@ impl Generator {
         + &String::from("\tsyscall\n").repeat(count)
     }
     
-    fn gen_loop_start(&self) -> String {
-        String::from("")    // not implemented
+    fn gen_loop_start(&self, id : usize) -> String {
+        format!(concat!(
+            "\tcmp byte ptr [rbx], 0\n",
+            "\tjz loop{id}End\n",
+            "loop{id}Start:\n"
+        ), id=id)
     }
     
-    fn gen_loop_end(&self) -> String {
-        String::from("")    // not implemented
+    fn gen_loop_end(&self, id : usize) -> String {
+        format!(concat!(
+            "\tcmp byte ptr [rbx], 0\n",
+            "\tjnz loop{id}Start\n",
+            "loop{id}End:\n"
+        ), id=id)
     }
     
     fn predefined_functions(&self) -> String {
@@ -117,6 +125,26 @@ impl Generator {
             "\tmov rdi, r8\n",
             "\tsyscall\n",
         ))
+    }
+    
+    fn gen_basic_instr(&self, instr : &BasicInstruction) -> String {
+        match instr.get_kind() {
+            Token::MemNext   => self.gen_mem_next(instr.get_count()),
+            Token::MemPrev   => self.gen_mem_prev(instr.get_count()),
+            Token::CellInc   => self.gen_cell_inc(instr.get_count()),
+            Token::CellDec   => self.gen_cell_dec(instr.get_count()),
+            Token::Read      => self.gen_cell_read(instr.get_count()),
+            Token::Write     => self.gen_cell_write(instr.get_count()),
+            _                => unreachable!()
+        }
+    }
+    
+    fn gen_loop(&self, instr : &Loop) -> String {
+        self.gen_loop_start(instr.get_id());
+        for inner in instr.get_innner_instr() {
+            self.gen_instr(inner);
+        }
+        self.gen_loop_end(instr.get_id())
     }
     
     pub fn gen_init(&self) -> String {
@@ -165,16 +193,14 @@ impl Generator {
         ), exit_code)
     }
     
-    pub fn gen_token(&self, tok : Token) -> String {
-        match tok {
-            Token::MemNext(count)   => self.gen_mem_next(count),
-            Token::MemPrev(count)   => self.gen_mem_prev(count),
-            Token::CellInc(count)   => self.gen_cell_inc(count),
-            Token::CellDec(count)   => self.gen_cell_dec(count),
-            Token::Read(count)      => self.gen_cell_read(count),
-            Token::Write(count)     => self.gen_cell_write(count),
-            Token::LoopStart               => self.gen_loop_start(),
-            Token::LoopEnd                 => self.gen_loop_end(),
+    pub fn gen_instr(&self, instr : &Instruction) -> String {
+        if let Some(basic) = instr.get_basic_instruction() {
+            return self.gen_basic_instr(basic);
         }
+        
+        if let Some(l) = instr.get_loop() {
+            return self.gen_loop(l);
+        }
+        unimplemented!("Unimplemented variant which is neither a loop nor a basic instruction.");
     }
 }

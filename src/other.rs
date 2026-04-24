@@ -2,18 +2,18 @@ use std::io::Write;
 use std::process::Output;
 
 use crate::compilation::Generator;
-use crate::tokenization::Token;
+use crate::parsing::Instruction;
 
-pub fn write_assembly(generator : Generator, tokens : Vec<Token>, output_file : &str) -> Result<(), std::io::Error> {
+pub fn write_assembly(generator : Generator, instructions : Vec<Instruction>, output_file : &str) -> Result<(), std::io::Error> {
     let mut output = std::fs::File::create(output_file)?;
     
     output.write(
         generator.gen_init().as_bytes()
     )?;
     
-    for tok in tokens {
+    for instr in instructions {
         output.write(
-            generator.gen_token(tok).as_bytes()
+            generator.gen_instr(&instr).as_bytes()
         )?;
     }
     
@@ -34,6 +34,10 @@ pub fn check_cmd_output(cmd_output : Output, cmd_name : &str) {
                 .expect(&format!("{cmd_name} failed and while decoding its output in stderr, an UTF8 error was raised.")),
         );
     }
+}
+
+pub fn is_permutation<T : std::cmp::Eq>(t1 : (T, T), t2 : (T, T)) -> bool {
+    t1 == t2 || t1 == (t2.1, t2.0)
 }
 
 

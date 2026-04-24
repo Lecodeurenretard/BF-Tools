@@ -26,7 +26,7 @@ pub struct Parameters {
     debug_symbols : bool,
     
     /// Prevent the compiler to simplify the program.
-    #[arg(long="no-simplification")]
+    #[arg(long="no-token-reducing")]
     disable_simplification : bool,
     
     

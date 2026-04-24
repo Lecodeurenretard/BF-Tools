@@ -3,14 +3,15 @@ use std::error::Error;
 use clap::Parser;
 
 use crate::parameters::Parameters;
-use crate::tokenization::{Token, simplify_token_list};
 use crate::compilation::Generator;
 use crate::other::{write_assembly, check_cmd_output};
+use crate::parsing::Instruction;
 
 mod tokenization;
 mod parsing;
 mod compilation;
 mod parameters;
+mod stack;
 mod other;
 
 fn main() -> Result<(), Box<dyn Error>>{
@@ -20,25 +21,21 @@ fn main() -> Result<(), Box<dyn Error>>{
         .expect("Please provide a correct filename");
     
     let tokens = tokenization::Token::tokenize(&contents);
-    let mut parser = parsing::Parser::new(
-        tokens.clone(),
-    );
     
-    let simplified_tokens : Vec<Token>;
-    if arguments.get_disable_simplification() {
-        simplified_tokens = tokens;
-    } else {
-        simplified_tokens = simplify_token_list(tokens)
+    let mut instructions = Instruction::parse(tokens.clone());
+    if !arguments.get_disable_simplification() {
+        let mut reducer = parsing::Reducer::new(instructions);
+        reducer.reduce();
+        instructions = reducer.clone_instructions();
     }
     
-    parser.parse();
     
     let output_file_asm = format!("{}.asm", arguments.get_output_file());
     let output_file_o   = format!("{}.o"  , arguments.get_output_file());
     let output_file     = arguments.get_output_file();
     write_assembly(
         Generator::new(arguments.get_cell_count()),
-        simplified_tokens,
+        instructions,
         &output_file_asm,
     )?;
     
