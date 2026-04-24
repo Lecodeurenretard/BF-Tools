@@ -1,3 +1,5 @@
+use clap::builder::Str;
+
 use crate::{parsing::{BasicInstruction, Instruction, Loop}, tokenization::Token};
 
 pub struct Generator {
@@ -140,11 +142,14 @@ impl Generator {
     }
     
     fn gen_loop(&self, instr : &Loop) -> String {
-        self.gen_loop_start(instr.get_id());
-        for inner in instr.get_innner_instr() {
-            self.gen_instr(inner);
+        let mut res : String;
+        
+        res = self.gen_loop_start(instr.get_id());
+        for inner in instr.get_inner_instr() {
+            res += &self.gen_instr(inner);
         }
-        self.gen_loop_end(instr.get_id())
+        res += &self.gen_loop_end(instr.get_id());
+        res
     }
     
     pub fn gen_init(&self) -> String {
@@ -204,3 +209,6 @@ impl Generator {
         unimplemented!("Unimplemented variant which is neither a loop nor a basic instruction.");
     }
 }
+
+
+// Generated assembly cannot be verified other than compiling and checking the result

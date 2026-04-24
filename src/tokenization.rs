@@ -75,6 +75,5 @@ mod tests {
             Token::tokenize("><+-,.[]"),
             vec![Token::MemNext, Token::MemPrev, Token::CellInc, Token::CellDec, Token::Read, Token::Write, Token::LoopStart, Token::LoopEnd]
         );
-        assert!(true);
     }
 }

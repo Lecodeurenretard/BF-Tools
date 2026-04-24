@@ -31,10 +31,6 @@ impl BasicInstruction {
     }
     
     pub fn are_opposites(instr1 : BasicInstruction, instr2 : BasicInstruction) -> bool {
-        if instr1.kind != instr2.kind {
-            return false;
-        }
-        
         let opposites = [
             (Token::MemNext, Token::MemPrev),
             (Token::CellInc, Token::CellDec),
@@ -65,7 +61,7 @@ impl TryFrom<Token> for BasicInstruction {
 }
 
 impl Loop {
-    pub fn get_innner_instr(&self) -> &Vec<Instruction> {
+    pub fn get_inner_instr(&self) -> &Vec<Instruction> {
         &self.inner_instructions
     }
     
@@ -75,7 +71,15 @@ impl Loop {
     
     /// Parse the vector of token as a loop, expect vec[starting_index] is Token::LoopStart.
     /// Return The resulting loop and the index of the corresponding Token::LoopEnd.
-    pub fn parse_loop(vec : &Vec<Token>, starting_index : usize, starting_id : usize) -> (Loop, usize, usize) {
+    pub fn parse(vec : &Vec<Token>, starting_index : usize, starting_id : usize) -> (Loop, usize, usize) {
+        if starting_index >= vec.len() {
+            unreachable!("Staring index {starting_index} is too high, it must be at most {} (for the given vec).", vec.len())
+        }
+        
+        if vec[starting_index] != Token::LoopStart {
+            unreachable!("Loop::parse() called on something that is not a loop.")
+        }
+        
         let mut res_loop = Loop {
             inner_instructions: Vec::new(),
             id: starting_id,
@@ -83,26 +87,33 @@ impl Loop {
         let mut i = starting_index;
         let mut max_id = starting_id;
         
-        let mut iter = vec[starting_index..].iter();
-        while let Some(token) = iter.next() {
+        while i < vec.len() - 1 {
             i += 1;
+            let token = vec[i];
             
             // insert basic instruction into vector
-            if let Ok(basic_inst) = BasicInstruction::try_from(*token) {
+            if let Ok(basic_inst) = BasicInstruction::try_from(token) {
                 res_loop.inner_instructions.push(Instruction::Basic(basic_inst));
                 continue;
             }
             
             // parse inner arrays
-            if *token == Token::LoopStart {
+            if token == Token::LoopStart {
                 let parsed_inner_loop : Loop;
-                (parsed_inner_loop, i, max_id) = Loop::parse_loop(&vec, i, max_id + 1);
+                (parsed_inner_loop, i, max_id) = Loop::parse(&vec, i, max_id + 1);
                 res_loop.inner_instructions.push(Instruction::Loop(parsed_inner_loop));
+                continue;
             }
             
-            if *token == Token::LoopEnd {
-                return (res_loop, i, max_id);
+            // end of loop
+            if token == Token::LoopEnd {
+                return (res_loop, i + 1, max_id);
             }
+        }
+        
+        // vec is non empty
+        if *vec.last().unwrap() == Token::LoopEnd {
+            return (res_loop, vec.len(), max_id);
         }
         
         panic!("Loop never closed.");
@@ -119,23 +130,23 @@ impl Instruction {
         let mut res = Vec::new();
         let mut i = 0;
         while i < vec.len() {
-            i += 1;
             res.push(
                 match vec[i] {
-                    Token::MemNext   => Instruction::Basic(BasicInstruction::try_from(Token::MemNext).unwrap()),
-                    Token::MemPrev   => Instruction::Basic(BasicInstruction::try_from(Token::MemPrev).unwrap()),
-                    Token::CellInc   => Instruction::Basic(BasicInstruction::try_from(Token::CellInc).unwrap()),
-                    Token::CellDec   => Instruction::Basic(BasicInstruction::try_from(Token::CellDec).unwrap()),
-                    Token::Read      => Instruction::Basic(BasicInstruction::try_from(Token::Read).unwrap()),
-                    Token::Write     => Instruction::Basic(BasicInstruction::try_from(Token::Write).unwrap()),
+                    Token::MemNext   => Instruction::Basic(BasicInstruction{ kind:  Token::MemNext, count: 1}),
+                    Token::MemPrev   => Instruction::Basic(BasicInstruction{ kind:  Token::MemPrev, count: 1}),
+                    Token::CellInc   => Instruction::Basic(BasicInstruction{ kind:  Token::CellInc, count: 1}),
+                    Token::CellDec   => Instruction::Basic(BasicInstruction{ kind:  Token::CellDec, count: 1}),
+                    Token::Read      => Instruction::Basic(BasicInstruction{ kind:  Token::Read,    count: 1}),
+                    Token::Write     => Instruction::Basic(BasicInstruction{ kind:  Token::Write,   count: 1}),
                     Token::LoopStart => {
-                        let res = Loop::parse_loop(&vec, 0, 0);
+                        let res = Loop::parse(&vec, i, 0);
                         i = res.1 + 1;  // skipping after Token::LoopEnd
                         Instruction::Loop(res.0)
                     },
                     Token::LoopEnd   => panic!("Loop never opened."),
                 }
-            )
+            );
+            i += 1;
         }
         res
     }
@@ -194,11 +205,6 @@ impl Reducer {
         reducer.instructions.clone()
     }
     
-    /// returns if the current element is the one before the last one
-    fn is_at_before_last(&self) -> bool {
-        self.position == self.instructions.len() - 1
-    }
-    
     fn current_instruction(&self) -> &Instruction {
         &self.instructions[self.position]
     }
@@ -207,6 +213,10 @@ impl Reducer {
     }
     
     fn reduce_trivial(&mut self) -> bool {
+        if self.position >= self.instructions.len() {
+            return false;
+        }
+        
         let mut pop_curr = false;
         if let Some(curr_instr) = self.current_instruction().get_basic_instruction() {
             if curr_instr.count == 0 {
@@ -221,6 +231,10 @@ impl Reducer {
     }
     
     fn reduce_consecutives(&mut self) -> bool {
+        if self.position >= self.instructions.len() {
+            return false;
+        }
+        
         // loops can't be reduced
         if self.current_instruction().get_loop().is_some() {
             return false;
@@ -229,17 +243,20 @@ impl Reducer {
         if !self.current_instruction().is_basic_instruction() {
             unimplemented!("There's an unexpected third type in Instruction.");
         }
+        
         self.position += 1;
+        let Some(repeating_instruction) = self.instructions[self.position-1].get_basic_instruction() else {
+            return false;
+        };
         
         let start_pos = self.position;
         let mut end_pos = start_pos;
         
-        // 
         while end_pos < self.instructions.len() {
-            let Some(basic_instr) = self.instructions[end_pos].get_basic_instruction() else {
+            let Some(end_instruction) = self.instructions[end_pos].get_basic_instruction() else {
                 break;
             };
-            if basic_instr.kind != self.instructions[start_pos].get_basic_instruction().unwrap().kind {
+            if end_instruction.kind != repeating_instruction.kind {
                 break;
             }
             end_pos += 1;
@@ -250,8 +267,11 @@ impl Reducer {
             return false;
         }
         
-        // end_pos is either out of bounds or "pointing" to a different instruction
-        self.instructions.drain(start_pos..(end_pos-1));
+        for instr in &mut self.instructions[start_pos..end_pos] {
+            instr.get_basic_instruction_mut()
+            .unwrap()
+            .count = 0;
+        }
         self.instructions[start_pos-1]
             .get_basic_instruction_mut()
             .unwrap()
@@ -262,7 +282,7 @@ impl Reducer {
     
     /// Remove the current instruction and the next one if they are opposite.
     fn reduce_opposites(&mut self) -> bool {
-        if self.position >= self.instructions.len() - 1 {
+        if self.instructions.is_empty() || self.position >= self.instructions.len() - 1 {
             return false;
         }
         
@@ -308,13 +328,7 @@ impl Reducer {
             }
         }
         
-        let mut modified;
-        modified = self.reduce_trivial();
-        self.position += 1;
-        modified |= self.reduce_trivial();
-        self.position -= 1;
-        
-        modified
+        true
     }
     
     pub fn new(instructions : Vec<Instruction>) -> Reducer {
@@ -348,8 +362,186 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_parse() {
+    #[should_panic(expected = "too high")]
+    fn test_loop_parse_start_too_high() {
+        Loop::parse(&vec![Token::LoopStart, Token::LoopEnd], 10, 0);
+    }
+    
+    #[test]
+    #[should_panic(expected = "never closed")]
+    fn test_loop_parse_never_closed() {
+        Loop::parse(&vec![Token::LoopStart], 0, 0);
+    }
+    
+    #[test]
+    #[should_panic(expected = "not a loop")]
+    fn test_loop_parse_never_opened1() {
+        Loop::parse(&vec![Token::LoopEnd], 0, 0);
+    }
+    
+    #[test]
+    #[should_panic(expected = "not a loop")]
+    fn test_loop_parse_never_opened2() {
+        Loop::parse(&vec![Token::Write], 0, 0);
+    }
+    
+    #[test]
+    #[should_panic(expected = "too high")]
+    fn test_loop_parse_never_starting_index_too_high() {
+        Loop::parse(&vec![Token::LoopStart, Token::LoopEnd], 10, 0);
+    }
+    
+    #[test]
+    fn test_loop_parse_empty() {
+        let res = Loop::parse(&vec![Token::LoopStart, Token::LoopEnd], 0, 0);
+        assert_eq!(res.0.inner_instructions.len(), 0);
+        assert_eq!(res.1, 2);
+        assert_eq!(res.2, 0);
+    }
+    
+    #[test]
+    fn test_loop_parse_basic() {
+        let res = Loop::parse(&vec![Token::LoopStart, Token::CellDec, Token::MemNext, Token::LoopEnd], 0, 0);
+        assert_eq!(res.0.inner_instructions[0].get_basic_instruction().unwrap().kind, Token::CellDec);
+        assert_eq!(res.0.inner_instructions[1].get_basic_instruction().unwrap().kind, Token::MemNext);
+        assert_eq!(res.1, 4);
+        assert_eq!(res.2, 0);
+    }
+    
+    #[test]
+    fn test_loop_parse_inner_loop() {
+        let res = Loop::parse(&vec![Token::LoopStart, Token::CellDec, Token::LoopStart, Token::MemNext, Token::LoopEnd, Token::LoopEnd], 0, 0);
+        assert_eq!(res.0.inner_instructions[0].get_basic_instruction().unwrap().kind, Token::CellDec);
+        assert_eq!(res.0.inner_instructions[1].get_loop().unwrap().id, 1);
+        assert_eq!(res.0.inner_instructions[1].get_loop().unwrap().inner_instructions[0].get_basic_instruction().unwrap().kind, Token::MemNext);
+        assert_eq!(res.1, 6);
+        assert_eq!(res.2, 1);
+    }
+    
+    #[test]
+    #[should_panic(expected = "Loop never opened.")]
+    fn test_instruction_parse_loop_never_opened() {
+        Instruction::parse_test("+,]");
+    }
+    
+    #[test]
+    fn test_instruction_parse() {
+        Instruction::parse_test("I love programming, brainfuck and punctuation. + something - someone");
         Instruction::parse_test("[]");
+        Instruction::parse_test("[+-,.]");
         Instruction::parse_test("[+-,.[]]");
+    }
+    
+    #[test]
+    fn test_reducer_reduce_trivial_empty() {
+        assert_eq!(Reducer::new(vec![]).reduce_trivial(), false);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_trivial_reducing() {
+        let instructions = vec![
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 0})
+        ];
+        assert_eq!(Reducer::new(instructions).reduce_trivial(), true);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_trivial_no_reducing() {
+        let instructions = vec![
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 3})
+        ];
+        assert_eq!(Reducer::new(instructions).reduce_trivial(), false);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_consecutives_empty() {
+        assert_eq!(Reducer::new(vec![]).reduce_consecutives(), false);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_consecutives_reduce() {
+        let instructions = vec![
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
+        ];
+        let mut reducer = Reducer::new(instructions);
+        assert_eq!(reducer.reduce_consecutives(), true);
+        assert_eq!(reducer.instructions.len(), 4);
+        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().count, 4);
+        assert_eq!(reducer.instructions[1].get_basic_instruction().unwrap().count, 0);
+        assert_eq!(reducer.instructions[2].get_basic_instruction().unwrap().count, 0);
+        assert_eq!(reducer.instructions[3].get_basic_instruction().unwrap().count, 0);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_consecutives_no_reduce() {
+        let instructions = vec![
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::MemNext, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::Read, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::Write, count: 1}),
+        ];
+        let mut reducer = Reducer::new(instructions);
+        assert_eq!(reducer.reduce_consecutives(), false);
+        assert_eq!(reducer.instructions.len(), 4);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_opposites_empty() {
+        assert_eq!(Reducer::new(vec![]).reduce_opposites(), false);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_opposites_reduce1() {
+        let instructions = vec![
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellInc, count: 1}),
+        ];
+        let mut reducer = Reducer::new(instructions);
+        assert_eq!(reducer.reduce_opposites(), true);
+        assert_eq!(reducer.instructions.len(), 2);
+        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().count, 0);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_opposites_reduce2() {
+        let instructions = vec![
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 10}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellInc, count: 5}),
+        ];
+        let mut reducer = Reducer::new(instructions);
+        assert_eq!(reducer.reduce_opposites(), true);
+        assert_eq!(reducer.instructions.len(), 2);
+        
+        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().count, 5);
+        assert_eq!(reducer.instructions[1].get_basic_instruction().unwrap().count, 0);
+
+    }
+    
+    #[test]
+    fn test_reducer_reduce_opposites_reduce3() {
+        let instructions = vec![
+            Instruction::Basic(BasicInstruction{kind: Token::CellInc, count: 10}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 5}),
+        ];
+        let mut reducer = Reducer::new(instructions);
+        assert_eq!(reducer.reduce_opposites(), true);
+        assert_eq!(reducer.instructions.len(), 2);
+        
+        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().count, 5);
+        assert_eq!(reducer.instructions[1].get_basic_instruction().unwrap().count, 0);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_opposites_no_reduce() {
+        let instructions = vec![
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::MemNext, count: 1}),
+        ];
+        let mut reducer = Reducer::new(instructions);
+        assert_eq!(reducer.reduce_opposites(), false);
+        assert_eq!(reducer.instructions.len(), 2);
     }
 }

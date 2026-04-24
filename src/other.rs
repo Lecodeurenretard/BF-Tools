@@ -47,7 +47,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn good_cmd() {
+    fn test_cmd_good() {
         let out = Command::new("echo")
             .arg("Hello")
             .output()
@@ -57,7 +57,7 @@ mod tests {
     
     #[test]
     #[should_panic(expected = "curl ended with status")]
-    fn bad_arg() {
+    fn test_cmd_bad_arg() {
         let out = Command::new("curl")
             .arg("NonExistent")
             .output()
