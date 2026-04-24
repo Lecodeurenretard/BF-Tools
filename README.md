@@ -2,6 +2,8 @@
 
 This repository contains multiple tools to code in Brainfuck (BF) all written in Ruse. At its final state it will have:
 - A compiler
+  - Compile to Unix x64 assembly
+  - Can possibly also compile to Wasm
 - An interpreter
 - A VSCode extension
 
