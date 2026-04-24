@@ -26,9 +26,13 @@ pub struct Parameters {
     debug_symbols : bool,
     
     /// Prevent the compiler to simplify the program.
-    #[arg(long="no-token-reducing")]
+    #[arg(long="no-token-reduction")]
     disable_simplification : bool,
     
+    /// Prevent the compiler to generate bound checking code.
+    /// Exposes the program to undefined behaviors.
+    #[arg(long="no-bound-checking")]
+    disable_bound_checking : bool,
     
     /// The number of cells the program have to allocate.
     #[arg(long)]
@@ -49,6 +53,7 @@ impl Parameters {
             assemble_only: false,
             debug_symbols: false,
             disable_simplification: false,
+            disable_bound_checking: false,
             cell_count: 128,
         }
     }
@@ -84,6 +89,10 @@ impl Parameters {
     
     pub fn get_disable_simplification(&self) -> bool {
         self.disable_simplification
+    }
+    
+    pub fn get_disable_bound_checking(&self) -> bool {
+        self.disable_bound_checking
     }
 }
 

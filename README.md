@@ -54,6 +54,67 @@ Compile and assemble only, do not link.The generated assembly and object file ar
 
 Compile with debug symbols. Debug symbols allow tools like GDB to run the executable with debigging tools (breakpoints, source assembly, ...).
 
+> **`--no-token-reduction`**  [flag]
+
+Prevents the compiler to reduce tokens, see [the token reduction section](#token-reduction).
+
+> **`--no-bound-checking`**  [flag]
+
+Prevents the compiler to generate bounds checking in the program. If not provided, at each `>` and `<` the programs checks if the memory pointer points out of bounds. 
+
 <!--- None found yet
 ### Undefined behaviors
 -->
+
+### Token reduction
+In order to lower file sizes and improve performance, the compiler can change the program during compilation.
+
+Token reduction consists in two ways:
+1. Run-length encode tokens.
+2. Cancel out instructructions that counter act eachother.
+	- For example, `+` and `-` are cancelled.
+
+The former is effective since BF programs tend to have a lot of duplicates.
+
+Before reduction:
+```
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++                                           >
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++              >
++++++++++++++++++++++-+++++++++++++++++++++-+++++++++++++++++++++++++++++++++++++-++++++++++++++++++++++++++++++++ >
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++       >
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++    >
+++++++++++++++++++++++++++++++++--------------------------------++++++++++++++++++++++++++++++++                   >
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++                            >
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++    >
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ >
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++       >
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++               >
++++++++++++++++++++++++++++++++++                                                                                  >
+++++++++++                                                                                                        >
+
+<<<<<<<<<<<<<
+.>.>.>.>.>.>.>.>.>.>.>.>.
+```
+
+After reduction:
+```
+72+  >
+101+ >
+108+ >
+108+ >
+111+ >
+32+  >
+87+  >
+111+ >
+114+ >
+108+ >
+100+ >
+33+  >
+10+
+
+12<
+.>.>.>.>.>.>.>.>.>.>.>.>.
+```
+
+
+<!--Neat site: https://esolangs.org/wiki/Talk:Brainfuck-->

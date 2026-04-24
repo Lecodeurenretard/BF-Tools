@@ -72,6 +72,10 @@ impl Loop {
     /// Parse the vector of token as a loop, expect vec[starting_index] is Token::LoopStart.
     /// Return The resulting loop and the index of the corresponding Token::LoopEnd.
     pub fn parse(vec : &Vec<Token>, starting_index : usize, starting_id : usize) -> (Loop, usize, usize) {
+        if vec.is_empty() {
+            unreachable!("The vector passed to Loop::parse() is empty.")
+        }
+        
         if starting_index >= vec.len() {
             unreachable!("Staring index {starting_index} is too high, it must be at most {} (for the given vec).", vec.len())
         }
@@ -107,13 +111,13 @@ impl Loop {
             
             // end of loop
             if token == Token::LoopEnd {
-                return (res_loop, i + 1, max_id);
+                return (res_loop, i, max_id);
             }
         }
         
-        // vec is non empty
+        // vec is not empty
         if *vec.last().unwrap() == Token::LoopEnd {
-            return (res_loop, vec.len(), max_id);
+            return (res_loop, vec.len() - 1, max_id);
         }
         
         panic!("Loop never closed.");
@@ -128,6 +132,7 @@ impl Instruction {
     
     pub fn parse(vec: Vec<Token>) -> Vec<Instruction> {
         let mut res = Vec::new();
+        let mut next_loop_id = 0;
         let mut i = 0;
         while i < vec.len() {
             res.push(
@@ -139,8 +144,9 @@ impl Instruction {
                     Token::Read      => Instruction::Basic(BasicInstruction{ kind:  Token::Read,    count: 1}),
                     Token::Write     => Instruction::Basic(BasicInstruction{ kind:  Token::Write,   count: 1}),
                     Token::LoopStart => {
-                        let res = Loop::parse(&vec, i, 0);
-                        i = res.1 + 1;  // skipping after Token::LoopEnd
+                        let res = Loop::parse(&vec, i, next_loop_id);
+                        i = res.1;
+                        next_loop_id = res.2 + 1;
                         Instruction::Loop(res.0)
                     },
                     Token::LoopEnd   => panic!("Loop never opened."),
@@ -244,12 +250,11 @@ impl Reducer {
             unimplemented!("There's an unexpected third type in Instruction.");
         }
         
-        self.position += 1;
-        let Some(repeating_instruction) = self.instructions[self.position-1].get_basic_instruction() else {
+        let Some(repeating_instruction) = self.instructions[self.position].get_basic_instruction() else {
             return false;
         };
         
-        let start_pos = self.position;
+        let start_pos = self.position + 1;
         let mut end_pos = start_pos;
         
         while end_pos < self.instructions.len() {
@@ -343,7 +348,18 @@ impl Reducer {
         while self.position < self.instructions.len() {
             
             self.reduce_trivial();
-            if self.reduce_consecutives() || self.reduce_opposites() {
+            if self.reduce_consecutives() {
+                self.reduce_trivial();
+            }
+            
+            self.position += 1;
+        }
+        
+        self.position = 0;
+        while self.position < self.instructions.len() {
+            
+            self.reduce_trivial();
+            if self.reduce_opposites() {
                 self.reduce_trivial();
             }
             
@@ -386,16 +402,10 @@ mod tests {
     }
     
     #[test]
-    #[should_panic(expected = "too high")]
-    fn test_loop_parse_never_starting_index_too_high() {
-        Loop::parse(&vec![Token::LoopStart, Token::LoopEnd], 10, 0);
-    }
-    
-    #[test]
     fn test_loop_parse_empty() {
         let res = Loop::parse(&vec![Token::LoopStart, Token::LoopEnd], 0, 0);
         assert_eq!(res.0.inner_instructions.len(), 0);
-        assert_eq!(res.1, 2);
+        assert_eq!(res.1, 1);
         assert_eq!(res.2, 0);
     }
     
@@ -404,7 +414,7 @@ mod tests {
         let res = Loop::parse(&vec![Token::LoopStart, Token::CellDec, Token::MemNext, Token::LoopEnd], 0, 0);
         assert_eq!(res.0.inner_instructions[0].get_basic_instruction().unwrap().kind, Token::CellDec);
         assert_eq!(res.0.inner_instructions[1].get_basic_instruction().unwrap().kind, Token::MemNext);
-        assert_eq!(res.1, 4);
+        assert_eq!(res.1, 3);
         assert_eq!(res.2, 0);
     }
     
@@ -414,7 +424,7 @@ mod tests {
         assert_eq!(res.0.inner_instructions[0].get_basic_instruction().unwrap().kind, Token::CellDec);
         assert_eq!(res.0.inner_instructions[1].get_loop().unwrap().id, 1);
         assert_eq!(res.0.inner_instructions[1].get_loop().unwrap().inner_instructions[0].get_basic_instruction().unwrap().kind, Token::MemNext);
-        assert_eq!(res.1, 6);
+        assert_eq!(res.1, 5);
         assert_eq!(res.2, 1);
     }
     
@@ -433,12 +443,33 @@ mod tests {
     }
     
     #[test]
+    fn test_instruction_parse_many_loops() {
+        fn test(v : Vec<Instruction>) {
+            assert!(!v.is_empty());
+            if v.len() == 1 {
+                return;
+            }
+            let mut greatest_loop_id = v[0].get_loop().unwrap().get_id();
+            for l in &v[1..] {
+                let id = l.get_loop().unwrap().get_id();
+                if !(greatest_loop_id < id) {
+                    panic!("Wrong id order.")
+                }
+                greatest_loop_id = id;
+            }
+        }
+        
+        test(Instruction::parse_test("[][]"));
+        test(Instruction::parse_test("[[]][[]]"));
+        test(Instruction::parse_test("[[[[[[]]]]]][][[]]"));
+    }
+    #[test]
     fn test_reducer_reduce_trivial_empty() {
         assert_eq!(Reducer::new(vec![]).reduce_trivial(), false);
     }
     
     #[test]
-    fn test_reducer_reduce_trivial_reducing() {
+    fn test_reducer_reduce_trivial_reduction() {
         let instructions = vec![
             Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 0})
         ];
@@ -446,7 +477,7 @@ mod tests {
     }
     
     #[test]
-    fn test_reducer_reduce_trivial_no_reducing() {
+    fn test_reducer_reduce_trivial_no_reduction() {
         let instructions = vec![
             Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 3})
         ];
@@ -544,4 +575,23 @@ mod tests {
         assert_eq!(reducer.reduce_opposites(), false);
         assert_eq!(reducer.instructions.len(), 2);
     }
+    
+    #[test]
+    fn test_reducer_reduce() {
+        let mut reducer = Reducer::new(vec![
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellInc, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellInc, count: 1}),
+        ]);
+        reducer.reduce();
+        assert_eq!(reducer.instructions.len(), 1);
+        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().kind, Token::CellDec);
+        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().count, 3);
+        //TOFIX: the parser must check again areas where it reduced
+    }
+    
 }

@@ -1,15 +1,16 @@
-use clap::builder::Str;
-
-use crate::{parsing::{BasicInstruction, Instruction, Loop}, tokenization::Token};
+use crate::parsing::{BasicInstruction, Instruction, Loop};
+use crate::tokenization::Token;
 
 pub struct Generator {
     cell_count : usize,
+    bound_check : bool,
 }
 
 impl Generator {
-    pub fn new(cell_count : usize) -> Generator {
+    pub fn new(cell_count : usize, bound_check : bool) -> Generator {
         Generator { 
-            cell_count: cell_count,
+            cell_count,
+            bound_check,
         }
     }
     
@@ -22,6 +23,10 @@ impl Generator {
     }
     
     fn check_ptr(&self, offset : isize) -> String {
+        if !self.bound_check {
+            return String::new();
+        }
+        
         format!(concat!(
             "\tlea r8, [rbx + {offset}]\n",
             "{init_err}",
