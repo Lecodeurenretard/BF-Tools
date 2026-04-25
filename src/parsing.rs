@@ -592,6 +592,7 @@ mod tests {
         assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().kind, Token::CellDec);
         assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().count, 3);
         //TOFIX: the parser must check again areas where it reduced
+        // also mybe instruction reordering?
     }
     
 }

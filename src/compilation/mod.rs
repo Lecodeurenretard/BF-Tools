@@ -45,7 +45,7 @@ impl Generator {
     /// its output must be in the data segment.
     fn create_error(&self, name : &str, message : &str) -> String {
         format!(concat!(
-            "\t{name}: .asciz \"{msg}\\n\"\n",
+            "\t{name}: .asciz \"\\n{msg}\\n\"\n",
             "\t.set {name}Len, $-{name}\n"
         ), name=name, msg=message)
     }

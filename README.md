@@ -29,6 +29,11 @@ For example, this program asks for a value, doubles it and prints it:
 >.
 ```
 
+### Comments
+Every character that is not any of the above is ignore as it is considered as comment.
+
+All character in curly braces `{}` is ignored regardless if it is an instruction or not.
+
 ## Expected behaviors
 - The memory is always initialzed to all zeros when starting program.
 - Every cell in the memory is an 8 bit integer.
@@ -119,4 +124,4 @@ After reduction:
 ```
 
 
-<!--Neat site: https://esolangs.org/wiki/Talk:Brainfuck-->
+<!--Neat site: https://esolangs.org/wiki/Talk:Brainfuck -->

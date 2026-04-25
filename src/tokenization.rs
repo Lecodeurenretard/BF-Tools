@@ -39,10 +39,24 @@ impl Token {
     }    
     pub fn tokenize(s : &str) -> Vec<Token> {
         let mut res : Vec<Token> = Vec::new();
+        let mut commented = false;
         for c in s.chars() {
+            if c == '}' {
+                if !commented {
+                    panic!("A comment was closed but never opened.")
+                }
+                commented = false;
+            }
+            if c == '{' { commented = true; }
+            if commented { continue; }
+             
+            
             if let Some(token) = Token::tokenize_basic_instruction_and_loop(c) {
                 res.push(token);
             };
+        }
+        if commented {
+            panic!("A comment was opened but never closed.")
         }
         res
     }
@@ -75,5 +89,33 @@ mod tests {
             Token::tokenize("><+-,.[]"),
             vec![Token::MemNext, Token::MemPrev, Token::CellInc, Token::CellDec, Token::Read, Token::Write, Token::LoopStart, Token::LoopEnd]
         );
+    }
+    
+    #[test]
+    fn test_tokenize_comments() {
+        assert_eq!(
+            Token::tokenize("I love sentences, they let me write tests with punctuation. Even tough there is no '+' nor '>' I'll take it."),
+            vec![Token::Read, Token::Write, Token::CellInc, Token::MemNext, Token::Write]
+        );
+        assert_eq!(
+            Token::tokenize("This time let's play with '{', '}' and '.'"),
+            vec![Token::Write]
+        );
+        assert_eq!(
+            Token::tokenize("Wrapping up a link in a comment: {https://github.com/Lecodeurenretard/BF-Tools/tree/master}"),
+            vec![]
+        );
+    }
+    
+    #[test]
+    #[should_panic(expected = "never opened")]
+    fn test_tokenize_comments_not_opened() {
+        Token::tokenize("+,}");
+    }
+    
+    #[test]
+    #[should_panic(expected = "never closed")]
+    fn test_tokenize_comments_not_closed() {
+        Token::tokenize("{+,");
     }
 }
