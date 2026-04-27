@@ -25,6 +25,10 @@ pub struct Parameters {
     #[arg(short='g', long="gen-debug")]
     debug_symbols : bool,
     
+    /// Prevent the compiler to reorder instructions.
+    #[arg(long="no-token-reordering")]
+    disable_reordering : bool,
+    
     /// Prevent the compiler to simplify the program.
     #[arg(long="no-token-reduction")]
     disable_simplification : bool,
@@ -52,6 +56,7 @@ impl Parameters {
             compile_only: false,
             assemble_only: false,
             debug_symbols: false,
+            disable_reordering: false,
             disable_simplification: false,
             disable_bound_checking: false,
             cell_count: 128,
@@ -87,8 +92,13 @@ impl Parameters {
         self.assemble_only
     }
     
+    pub fn get_disable_reordering(&self) -> bool {
+        self.disable_reordering
+    }
+    
     pub fn get_disable_simplification(&self) -> bool {
-        self.disable_simplification
+        // can't simplify without reordering
+        self.disable_simplification && self.disable_reordering
     }
     
     pub fn get_disable_bound_checking(&self) -> bool {

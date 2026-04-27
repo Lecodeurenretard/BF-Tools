@@ -6,6 +6,7 @@ use crate::parameters::Parameters;
 use crate::compilation::Generator;
 use crate::other::{write_assembly, check_cmd_output};
 use crate::parsing::Instruction;
+use crate::tokenization::Token;
 
 mod tokenization;
 mod parsing;
@@ -20,8 +21,11 @@ fn main() -> Result<(), Box<dyn Error>>{
     let contents = std::fs::read_to_string(arguments.get_input_file())     // same representation as in C, 0th element is the executable's name
         .expect("Please provide a correct filename");
     
-    let tokens = tokenization::Token::tokenize(&contents);
-    
+    let mut tokens = tokenization::Token::tokenize(&contents);
+    if !arguments.get_disable_reordering() {
+        Token::reorder_opposites(&mut tokens);
+    }
+        
     let mut instructions = Instruction::parse(tokens);
     if !arguments.get_disable_simplification() {
         let mut reducer = parsing::Reducer::new(instructions);

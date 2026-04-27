@@ -1,3 +1,7 @@
+use std::cmp;
+
+use crate::other::is_permutation;
+
 #[derive(Clone, Copy, Debug)]
 pub enum Token {
     MemNext,
@@ -60,6 +64,59 @@ impl Token {
         }
         res
     }
+    
+    #[cfg(test)]
+    pub fn tokenize_and_reduce(s : &str) -> Vec<Token> {
+        let mut res = Token::tokenize(s);
+        Token::reorder_opposites(&mut res);
+        res
+    }
+    
+    pub fn reorder_opposites(mut vec_tokens : &mut Vec<Token>) {
+        fn reorder_opposite(v : &mut Vec<Token>, opposites : (Token, Token)) {
+            let compare_inc_dec = |tok1: &Token, tok2 : &Token| {
+                if !is_permutation((*tok1, *tok2), opposites) {
+                    return cmp::Ordering::Equal;
+                }
+                if (*tok1, *tok2) == opposites {
+                    cmp::Ordering::Greater
+                } else if (*tok1, *tok2) == (opposites.1, opposites.0) {
+                    cmp::Ordering::Less
+                } else if tok1 == tok2 {
+                    cmp::Ordering::Equal
+                } else {
+                    unreachable!()
+                }
+            };
+            let mut range_start = 0;
+            let mut in_range = false;
+            let mut ranges = Vec::new();
+            // Find subarrays where tokens are all opposite instrucions.
+            for (i, tok) in v.iter().enumerate() {
+                if (*tok != opposites.0 && *tok != opposites.1) || i == v.len() - 1 {
+                    if in_range {
+                        if i - range_start > 1{ 
+                            ranges.push(range_start..i);
+                        }
+                        in_range = false;
+                    }
+                    continue;
+                }
+                
+                if !in_range {
+                    range_start = i;
+                    in_range = true;
+                }
+            }
+            
+            // reorders sub arrays
+            for r in ranges {
+                v[r].sort_by(compare_inc_dec);
+            }
+        }
+        reorder_opposite(&mut vec_tokens, (Token::CellDec, Token::CellInc));
+        reorder_opposite(&mut vec_tokens, (Token::MemPrev, Token::MemNext));
+    }
 }
 
 impl std::cmp::PartialEq for Token {
@@ -102,8 +159,13 @@ mod tests {
             vec![Token::Write]
         );
         assert_eq!(
-            Token::tokenize("Wrapping up a link in a comment: {https://github.com/Lecodeurenretard/BF-Tools/tree/master}"),
-            vec![]
+            Token::tokenize("Wrapping up a link in a comment. {https://github.com/Lecodeurenretard/BF-Tools/tree/master}"),
+            vec![Token::Write]
+        );
+        
+        assert_eq!(
+            Token::tokenize(".+ {Comment >-<} -[]"),
+            vec![Token::Write, Token::CellInc, Token::CellDec, Token::LoopStart, Token::LoopEnd]
         );
     }
     
@@ -117,5 +179,116 @@ mod tests {
     #[should_panic(expected = "never closed")]
     fn test_tokenize_comments_not_closed() {
         Token::tokenize("{+,");
+    }
+    
+    #[test]
+    fn test_reorder_inc() {
+        let mut tokens = vec![
+            Token::CellDec,
+            Token::CellInc,
+            Token::CellInc,
+            Token::CellDec,
+        ];
+        Token::reorder_opposites(&mut tokens);
+        
+        assert_eq!(tokens.len(), 4);
+        assert_eq!(tokens[0], Token::CellInc);
+        assert_eq!(tokens[1], Token::CellInc);
+        assert_eq!(tokens[2], Token::CellDec);
+        assert_eq!(tokens[3], Token::CellDec);
+        
+    }
+    
+    #[test]
+    fn test_reorder_next() {
+        let mut tokens = vec![
+            Token::MemNext,
+            Token::MemPrev,
+            Token::MemNext,
+            Token::MemPrev,
+        ];
+        Token::reorder_opposites(&mut tokens);
+        
+        assert_eq!(tokens.len(), 4);
+        assert_eq!(tokens[0], Token::MemNext);
+        assert_eq!(tokens[1], Token::MemNext);
+        assert_eq!(tokens[2], Token::MemPrev);
+        assert_eq!(tokens[3], Token::MemPrev);
+    }
+    
+    #[test]
+    fn test_reorder_mingled1() {
+        let mut tokens = vec![
+            Token::MemNext,
+            Token::MemPrev,
+            Token::CellDec,
+            Token::CellInc,
+        ];
+        Token::reorder_opposites(&mut tokens);
+        
+        assert_eq!(tokens.len(), 4);
+        assert_eq!(tokens[0], Token::MemNext);
+        assert_eq!(tokens[1], Token::MemPrev);
+        assert_eq!(tokens[2], Token::CellDec);
+        assert_eq!(tokens[3], Token::CellInc);
+    }
+    
+    #[test]
+    fn test_reorder_mingled2() {
+        let mut tokens = vec![
+            Token::MemNext,
+            Token::CellInc,
+            Token::MemPrev,
+            Token::CellDec,
+        ];
+        Token::reorder_opposites(&mut tokens);
+        
+        assert_eq!(tokens.len(), 4);
+        assert_eq!(tokens[0], Token::MemNext);
+        assert_eq!(tokens[1], Token::CellInc);
+        assert_eq!(tokens[2], Token::MemPrev);
+        assert_eq!(tokens[3], Token::CellDec);
+    }
+    
+    #[test]
+    fn test_reorder_wall1() {
+        let mut tokens = vec![
+            Token::MemNext,
+            Token::CellInc,
+            Token::Read,
+            Token::MemPrev,
+            Token::CellDec,
+        ];
+        Token::reorder_opposites(&mut tokens);
+        
+        assert_eq!(tokens.len(), 5);
+        assert_eq!(tokens[0], Token::MemNext);
+        assert_eq!(tokens[1], Token::CellInc);
+        assert_eq!(tokens[2], Token::Read);
+        assert_eq!(tokens[3], Token::MemPrev);
+        assert_eq!(tokens[4], Token::CellDec);
+    }
+    
+    #[test]
+    fn test_reorder_wall2() {
+        let mut tokens = vec![
+            Token::CellInc,
+            Token::CellDec,
+            Token::CellInc,
+            Token::Read,
+            Token::MemPrev,
+            Token::MemNext,
+            Token::MemPrev,
+        ];
+        Token::reorder_opposites(&mut tokens);
+        
+        assert_eq!(tokens.len(), 7);
+        assert_eq!(tokens[0], Token::CellInc);
+        assert_eq!(tokens[1], Token::CellInc);
+        assert_eq!(tokens[2], Token::CellDec);
+        assert_eq!(tokens[3], Token::Read);
+        assert_eq!(tokens[4], Token::MemNext);
+        assert_eq!(tokens[5], Token::MemPrev);
+        assert_eq!(tokens[6], Token::MemPrev);
     }
 }

@@ -206,7 +206,11 @@ pub struct Reducer {
 impl Reducer {
     #[cfg(test)]
     fn test_reduced(s : &str) -> Vec<Instruction> {
-        let mut reducer = Reducer::new(Instruction::parse(Token::tokenize(s)));
+        let mut reducer = Reducer::new(
+            Instruction::parse(
+                Token::tokenize_and_reduce(s)
+            )
+        );
         reducer.reduce();
         reducer.instructions.clone()
     }
@@ -232,6 +236,7 @@ impl Reducer {
         
         if pop_curr {
             self.instructions.remove(self.position);
+            self.reduce_trivial();
         }
         pop_curr
     }
@@ -247,12 +252,12 @@ impl Reducer {
         }
         
         if !self.current_instruction().is_basic_instruction() {
-            unimplemented!("There's an unexpected third type in Instruction.");
+            unreachable!("An instruction is neither basic nor a loop.");
         }
         
-        let Some(repeating_instruction) = self.instructions[self.position].get_basic_instruction() else {
-            return false;
-        };
+        let repeating_instruction = self.instructions[self.position]
+            .get_basic_instruction()
+            .unwrap();  // checked above
         
         let start_pos = self.position + 1;
         let mut end_pos = start_pos;
@@ -344,26 +349,51 @@ impl Reducer {
     }
     
     pub fn reduce(&mut self) {
-        self.position = 0;
-        while self.position < self.instructions.len() {
-            
-            self.reduce_trivial();
-            if self.reduce_consecutives() {
-                self.reduce_trivial();
+        /// Return if there's at least one change
+        fn reduce_whole_vector(reducer : &mut Reducer, mut callback : impl FnMut(&mut Reducer) -> bool) -> bool {
+            let mut one_change = false;
+            reducer.position = 0;
+            while reducer.position < reducer.instructions.len() {
+                reducer.reduce_trivial();
+                
+                if callback(reducer) {
+                    one_change = true;
+                    reducer.reduce_trivial();
+                }
+                
+                reducer.position += 1;
             }
-            
-            self.position += 1;
+            one_change
         }
         
-        self.position = 0;
-        while self.position < self.instructions.len() {
+        // Slow but works
+        let mut at_least_one_change = true;
+        while at_least_one_change {
+            at_least_one_change = false;
             
-            self.reduce_trivial();
-            if self.reduce_opposites() {
+            self.position = 0;
+            while self.position < self.instructions.len() {
+                
                 self.reduce_trivial();
+                if self.reduce_consecutives() {
+                    at_least_one_change = true;
+                    self.reduce_trivial();
+                }
+                
+                self.position += 1;
             }
             
-            self.position += 1;
+            self.position = 0;
+            while self.position < self.instructions.len() {
+                
+                self.reduce_trivial();
+                if self.reduce_opposites() {
+                    at_least_one_change = true;
+                    self.reduce_trivial();
+                }
+                
+                self.position += 1;
+            }
         }
     }
     
@@ -473,7 +503,32 @@ mod tests {
         let instructions = vec![
             Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 0})
         ];
-        assert_eq!(Reducer::new(instructions).reduce_trivial(), true);
+        let mut reducer = Reducer::new(instructions);
+        assert_eq!(reducer.reduce_trivial(), true);
+        assert_eq!(reducer.instructions.len(), 0);
+        
+        
+        let instructions = vec![
+            Instruction::Basic(BasicInstruction{kind: Token::MemNext, count: 0}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellInc, count: 0}),
+            Instruction::Basic(BasicInstruction{kind: Token::Write, count: 0}),
+        ];
+        reducer = Reducer::new(instructions);
+        assert_eq!(reducer.reduce_trivial(), true);
+        assert_eq!(reducer.instructions.len(), 0);
+        
+        let instructions = vec![
+            Instruction::Basic(BasicInstruction{kind: Token::MemNext, count: 0}),
+            Instruction::Basic(BasicInstruction{kind: Token::CellInc, count: 1}),
+            Instruction::Basic(BasicInstruction{kind: Token::Write, count: 0}),
+        ];
+        reducer = Reducer::new(instructions);
+        assert_eq!(reducer.reduce_trivial(), true);
+        assert_eq!(reducer.instructions.len(), 2);
+        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().get_kind(), Token::CellInc);
+        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().get_count(), 1);
+        assert_eq!(reducer.instructions[1].get_basic_instruction().unwrap().get_kind(), Token::Write);
+        assert_eq!(reducer.instructions[1].get_basic_instruction().unwrap().get_count(), 0);
     }
     
     #[test]
@@ -491,12 +546,7 @@ mod tests {
     
     #[test]
     fn test_reducer_reduce_consecutives_reduce() {
-        let instructions = vec![
-            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
-        ];
+        let instructions = Instruction::parse_test("----");
         let mut reducer = Reducer::new(instructions);
         assert_eq!(reducer.reduce_consecutives(), true);
         assert_eq!(reducer.instructions.len(), 4);
@@ -508,13 +558,9 @@ mod tests {
     
     #[test]
     fn test_reducer_reduce_consecutives_no_reduce() {
-        let instructions = vec![
-            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::MemNext, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::Read, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::Write, count: 1}),
-        ];
+        let instructions = Instruction::parse_test("->,.");
         let mut reducer = Reducer::new(instructions);
+        
         assert_eq!(reducer.reduce_consecutives(), false);
         assert_eq!(reducer.instructions.len(), 4);
     }
@@ -526,10 +572,7 @@ mod tests {
     
     #[test]
     fn test_reducer_reduce_opposites_reduce1() {
-        let instructions = vec![
-            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::CellInc, count: 1}),
-        ];
+        let instructions = Instruction::parse_test("<>");
         let mut reducer = Reducer::new(instructions);
         assert_eq!(reducer.reduce_opposites(), true);
         assert_eq!(reducer.instructions.len(), 2);
@@ -548,7 +591,6 @@ mod tests {
         
         assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().count, 5);
         assert_eq!(reducer.instructions[1].get_basic_instruction().unwrap().count, 0);
-
     }
     
     #[test]
@@ -577,22 +619,30 @@ mod tests {
     }
     
     #[test]
-    fn test_reducer_reduce() {
-        let mut reducer = Reducer::new(vec![
-            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::CellInc, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::CellDec, count: 1}),
-            Instruction::Basic(BasicInstruction{kind: Token::CellInc, count: 1}),
-        ]);
-        reducer.reduce();
-        assert_eq!(reducer.instructions.len(), 1);
-        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().kind, Token::CellDec);
-        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().count, 3);
-        //TOFIX: the parser must check again areas where it reduced
-        // also mybe instruction reordering?
+    fn test_reducer_reduce1() {
+        let reduced = Reducer::test_reduced("-----++");
+        assert_eq!(reduced.len(), 1);
+        assert_eq!(reduced[0].get_basic_instruction().unwrap().kind, Token::CellDec);
+        assert_eq!(reduced[0].get_basic_instruction().unwrap().count, 3);
     }
     
+    #[test]
+    fn test_reducer_reduce2() {
+        let reduced = Reducer::test_reduced(">>+++++[<]");
+        assert_eq!(reduced.len(), 3);
+        
+        fn get_basic(instr : &Instruction) -> &BasicInstruction {
+            instr.get_basic_instruction().unwrap()
+        }
+        fn get_loop_instr(instr : &Instruction) -> &Vec<Instruction> {
+            &instr.get_loop().unwrap().inner_instructions
+        }
+        
+        assert_eq!(get_basic(&reduced[0]).kind, Token::MemNext);
+        assert_eq!(get_basic(&reduced[0]).count, 2);
+        assert_eq!(get_basic(&reduced[1]).kind, Token::CellInc);
+        assert_eq!(get_basic(&reduced[1]).count, 5);
+        assert_eq!(get_basic(&get_loop_instr(&reduced[2])[0]).kind, Token::MemPrev);
+        assert_eq!(get_basic(&get_loop_instr(&reduced[2])[0]).count, 1);
+    }
 }
