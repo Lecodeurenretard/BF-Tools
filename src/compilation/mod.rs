@@ -1,4 +1,4 @@
-use crate::parsing::{BasicInstruction, Instruction, Loop};
+use crate::parsing::{BasicInstruction, ConfigFunction, Instruction, Loop};
 use crate::tokenization::Token;
 
 pub struct Generator {
@@ -157,6 +157,10 @@ impl Generator {
         res
     }
     
+    fn gen_config_fun(&self, instr : &ConfigFunction) -> String {
+        panic!("Unknown configuration function: `{}()`.", instr.get_name());
+    }
+    
     pub fn gen_init(&self) -> String {
         format!(concat!(
             ".global _start\n",
@@ -211,7 +215,12 @@ impl Generator {
         if let Some(l) = instr.get_loop() {
             return self.gen_loop(l);
         }
-        unimplemented!("Unimplemented variant which is neither a loop nor a basic instruction.");
+        
+        if let Some(config_fun) = instr.get_configuration_function() {
+            return  self.gen_config_fun(config_fun);
+        }
+        
+        unreachable!("Instruction is not those categorises: loop, basic instruction or configuration function.");
     }
 }
 

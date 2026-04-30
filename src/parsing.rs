@@ -2,7 +2,7 @@ use crate::tokenization::Token;
 use std::cmp::Ordering;
 use crate::other::is_permutation;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct BasicInstruction {
     kind : Token,
     count : usize,
@@ -14,16 +14,29 @@ pub struct Loop {
     id : usize,
 }
 
+#[derive(Clone, Copy)]
+enum Literal {
+    Int(usize),
+    Char(char),
+}
+
+#[derive(Clone)]
+pub struct ConfigFunction {
+    name : String,
+    args : Vec<Literal>,
+}
+
 #[derive(Clone)]
 pub enum Instruction {
+    Config(ConfigFunction),
     Basic(BasicInstruction),
     Loop(Loop),
 }
 
 
 impl BasicInstruction {
-    pub fn get_kind(&self) -> Token {
-        self.kind
+    pub fn get_kind(&self) -> &Token {
+        &self.kind
     }
     
     pub fn get_count(&self) -> usize {
@@ -32,11 +45,11 @@ impl BasicInstruction {
     
     pub fn are_opposites(instr1 : BasicInstruction, instr2 : BasicInstruction) -> bool {
         let opposites = [
-            (Token::MemNext, Token::MemPrev),
-            (Token::CellInc, Token::CellDec),
+            (&Token::MemNext, &Token::MemPrev),
+            (&Token::CellInc, &Token::CellDec),
         ];
         for opposite in opposites {
-            if is_permutation((instr1.kind, instr2.kind), opposite) {
+            if is_permutation((&instr1.kind, &instr2.kind), opposite) {
                 return true;
             }
         }
@@ -49,14 +62,22 @@ impl TryFrom<Token> for BasicInstruction {
     
     fn try_from(value: Token) -> Result<Self, Self::Error> {
         match value {
-            Token::MemNext => Ok(BasicInstruction { kind: Token::MemNext, count: 1}),
-            Token::MemPrev => Ok(BasicInstruction { kind: Token::MemPrev, count: 1}),
-            Token::CellInc => Ok(BasicInstruction { kind: Token::CellInc, count: 1}),
-            Token::CellDec => Ok(BasicInstruction { kind: Token::CellDec, count: 1}),
-            Token::Read    => Ok(BasicInstruction { kind: Token::Read   , count: 1}),
-            Token::Write   => Ok(BasicInstruction { kind: Token::Write  , count: 1}),
+            Token::MemNext => Ok(BasicInstruction { kind: Token::MemNext, count: 1 }),
+            Token::MemPrev => Ok(BasicInstruction { kind: Token::MemPrev, count: 1 }),
+            Token::CellInc => Ok(BasicInstruction { kind: Token::CellInc, count: 1 }),
+            Token::CellDec => Ok(BasicInstruction { kind: Token::CellDec, count: 1 }),
+            Token::Read    => Ok(BasicInstruction { kind: Token::Read   , count: 1 }),
+            Token::Write   => Ok(BasicInstruction { kind: Token::Write  , count: 1 }),
             tok     => Err(format!("The token '{tok:?}' isn't a basic instruction."))
         }
+    }
+}
+
+impl TryFrom<&Token> for BasicInstruction {
+    type Error = String;
+    
+    fn try_from(value: &Token) -> Result<Self, Self::Error> {
+        BasicInstruction::try_from(value.clone())
     }
 }
 
@@ -80,7 +101,7 @@ impl Loop {
             unreachable!("Staring index {starting_index} is too high, it must be at most {} (for the given vec).", vec.len())
         }
         
-        if vec[starting_index] != Token::LoopStart {
+        if vec[starting_index] != Token::BracketOpen {
             unreachable!("Loop::parse() called on something that is not a loop.")
         }
         
@@ -93,7 +114,7 @@ impl Loop {
         
         while i < vec.len() - 1 {
             i += 1;
-            let token = vec[i];
+            let token = &vec[i];
             
             // insert basic instruction into vector
             if let Ok(basic_inst) = BasicInstruction::try_from(token) {
@@ -102,7 +123,7 @@ impl Loop {
             }
             
             // parse inner arrays
-            if token == Token::LoopStart {
+            if token == &Token::BracketOpen {
                 let parsed_inner_loop : Loop;
                 (parsed_inner_loop, i, max_id) = Loop::parse(&vec, i, max_id + 1);
                 res_loop.inner_instructions.push(Instruction::Loop(parsed_inner_loop));
@@ -110,13 +131,13 @@ impl Loop {
             }
             
             // end of loop
-            if token == Token::LoopEnd {
+            if token == &Token::BracketClose {
                 return (res_loop, i, max_id);
             }
         }
         
         // vec is not empty
-        if *vec.last().unwrap() == Token::LoopEnd {
+        if *vec.last().unwrap() == Token::BracketClose {
             return (res_loop, vec.len() - 1, max_id);
         }
         
@@ -124,32 +145,90 @@ impl Loop {
     }
 }
 
+impl ConfigFunction {
+    pub fn get_name(&self) -> &String {
+        &self.name
+    }
+    pub fn get_args(&self) -> &Vec<Literal> {
+        &self.args
+    }
+}
+
 impl Instruction {
     #[cfg(test)]
     fn parse_test(s : &str) -> Vec<Instruction> {
-        Instruction::parse(Token::tokenize(s))
+        Instruction::parse(Token::tokenize(String::from(s)))
     }
     
-    pub fn parse(vec: Vec<Token>) -> Vec<Instruction> {
+    fn parse_configuration_functions(tokens : &Vec<Token>) -> (Vec<Instruction>, usize) {
+        let mut already_parsed = Vec::new();
         let mut res = Vec::new();
-        let mut next_loop_id = 0;
         let mut i = 0;
-        while i < vec.len() {
+        
+        while i < tokens.len() && tokens[i] == Token::ConfigFunc(String::from("")) {
+            let name = tokens[i].get_wrapped_value()
+                .get_str()
+                .unwrap()
+                .clone();
+            
+            let wrapped = tokens[i].get_wrapped_value();
+            if already_parsed.contains(&wrapped) {
+                panic!("Configuration function `{}()` called at least two times.", name);
+            }
+            already_parsed.push(wrapped);
+            
+            i += 1;
+            
+            let mut args = Vec::new();
+            while i < tokens.len() {
+                args.push(
+                    match tokens[i] {
+                        Token::IntLit(i) => Literal::Int(i),
+                        Token::CharLit(c) => Literal::Char(c),
+                        _ => break
+                    }
+                );
+                i += 1;
+            }
+            
+            i +=1;
+            if i >= tokens.len() || tokens[i] != Token::ParenClose {
+                panic!("Unmatched parenthesis in configuration function call.");
+            }
+            res.push(Instruction::Config(ConfigFunction { name, args }));
+            
+            i += 1;
+        }
+        
+        (res, i)
+    }
+    
+    pub fn parse(tokens: Vec<Token>) -> Vec<Instruction> {
+        let (mut res, mut i) = Instruction::parse_configuration_functions(&tokens);
+        i += 1;     // i was pointing to the ")"
+        
+        let mut next_loop_id = 0;
+        while i < tokens.len() {
             res.push(
-                match vec[i] {
+                match tokens[i] {
                     Token::MemNext   => Instruction::Basic(BasicInstruction{ kind:  Token::MemNext, count: 1}),
                     Token::MemPrev   => Instruction::Basic(BasicInstruction{ kind:  Token::MemPrev, count: 1}),
                     Token::CellInc   => Instruction::Basic(BasicInstruction{ kind:  Token::CellInc, count: 1}),
                     Token::CellDec   => Instruction::Basic(BasicInstruction{ kind:  Token::CellDec, count: 1}),
                     Token::Read      => Instruction::Basic(BasicInstruction{ kind:  Token::Read,    count: 1}),
                     Token::Write     => Instruction::Basic(BasicInstruction{ kind:  Token::Write,   count: 1}),
-                    Token::LoopStart => {
-                        let res = Loop::parse(&vec, i, next_loop_id);
+                    Token::BracketOpen => {
+                        let res = Loop::parse(&tokens, i, next_loop_id);
                         i = res.1;
                         next_loop_id = res.2 + 1;
                         Instruction::Loop(res.0)
                     },
-                    Token::LoopEnd   => panic!("Loop never opened."),
+                    Token::BracketClose   => panic!("Loop never opened."),
+                    Token::ParenOpen      => unreachable!("Unexpected opening parenthesis."),   // Unrelevant parenthesis are discareded at tokenizations
+                    Token::ParenClose     => unreachable!("Unexpected closing parenthesis."),
+                    Token::ConfigFunc(_) => panic!("Configuration functions must be at the start of the program."),
+                    Token::IntLit(l) => unreachable!("Unexpected literal `{l}`."),
+                    Token::CharLit(l) => unreachable!("Unexpected literal `{l}`."),
                 }
             );
             i += 1;
@@ -192,6 +271,25 @@ impl Instruction {
         match self {
             Instruction::Loop(l) => Some(l),
             _                               => None
+        }
+    }
+    
+    pub fn is_configuration_function(&self) -> bool {
+        match self {
+            Instruction::Config(_) => true,
+            _                     => false
+        }
+    }
+    pub fn get_configuration_function(&self) -> Option<&ConfigFunction> {
+        match self {
+            Instruction::Config(cf) => Some(cf),
+            _                                        => None
+        }
+    }
+    pub fn get_configuration_function_mut(&mut self) -> Option<&mut ConfigFunction> {
+        match self {
+            Instruction::Config(cf) => Some(cf),
+            _                                            => None
         }
     }
 }
@@ -246,13 +344,13 @@ impl Reducer {
             return false;
         }
         
-        // loops can't be reduced
-        if self.current_instruction().get_loop().is_some() {
+        // loops and configuration functions can't be reduced
+        if self.current_instruction().is_loop() || self.current_instruction().is_configuration_function() {
             return false;
         }
         
         if !self.current_instruction().is_basic_instruction() {
-            unreachable!("An instruction is neither basic nor a loop.");
+            unreachable!("An instruction is neither basic, a loop nor a configuration function.");
         }
         
         let repeating_instruction = self.instructions[self.position]
@@ -349,23 +447,6 @@ impl Reducer {
     }
     
     pub fn reduce(&mut self) {
-        /// Return if there's at least one change
-        fn reduce_whole_vector(reducer : &mut Reducer, mut callback : impl FnMut(&mut Reducer) -> bool) -> bool {
-            let mut one_change = false;
-            reducer.position = 0;
-            while reducer.position < reducer.instructions.len() {
-                reducer.reduce_trivial();
-                
-                if callback(reducer) {
-                    one_change = true;
-                    reducer.reduce_trivial();
-                }
-                
-                reducer.position += 1;
-            }
-            one_change
-        }
-        
         // Slow but works
         let mut at_least_one_change = true;
         while at_least_one_change {
@@ -410,19 +491,19 @@ mod tests {
     #[test]
     #[should_panic(expected = "too high")]
     fn test_loop_parse_start_too_high() {
-        Loop::parse(&vec![Token::LoopStart, Token::LoopEnd], 10, 0);
+        Loop::parse(&vec![Token::BracketOpen, Token::BracketClose], 10, 0);
     }
     
     #[test]
     #[should_panic(expected = "never closed")]
     fn test_loop_parse_never_closed() {
-        Loop::parse(&vec![Token::LoopStart], 0, 0);
+        Loop::parse(&vec![Token::BracketOpen], 0, 0);
     }
     
     #[test]
     #[should_panic(expected = "not a loop")]
     fn test_loop_parse_never_opened1() {
-        Loop::parse(&vec![Token::LoopEnd], 0, 0);
+        Loop::parse(&vec![Token::BracketClose], 0, 0);
     }
     
     #[test]
@@ -433,7 +514,7 @@ mod tests {
     
     #[test]
     fn test_loop_parse_empty() {
-        let res = Loop::parse(&vec![Token::LoopStart, Token::LoopEnd], 0, 0);
+        let res = Loop::parse(&vec![Token::BracketOpen, Token::BracketClose], 0, 0);
         assert_eq!(res.0.inner_instructions.len(), 0);
         assert_eq!(res.1, 1);
         assert_eq!(res.2, 0);
@@ -441,7 +522,7 @@ mod tests {
     
     #[test]
     fn test_loop_parse_basic() {
-        let res = Loop::parse(&vec![Token::LoopStart, Token::CellDec, Token::MemNext, Token::LoopEnd], 0, 0);
+        let res = Loop::parse(&vec![Token::BracketOpen, Token::CellDec, Token::MemNext, Token::BracketClose], 0, 0);
         assert_eq!(res.0.inner_instructions[0].get_basic_instruction().unwrap().kind, Token::CellDec);
         assert_eq!(res.0.inner_instructions[1].get_basic_instruction().unwrap().kind, Token::MemNext);
         assert_eq!(res.1, 3);
@@ -450,7 +531,7 @@ mod tests {
     
     #[test]
     fn test_loop_parse_inner_loop() {
-        let res = Loop::parse(&vec![Token::LoopStart, Token::CellDec, Token::LoopStart, Token::MemNext, Token::LoopEnd, Token::LoopEnd], 0, 0);
+        let res = Loop::parse(&vec![Token::BracketOpen, Token::CellDec, Token::BracketOpen, Token::MemNext, Token::BracketClose, Token::BracketClose], 0, 0);
         assert_eq!(res.0.inner_instructions[0].get_basic_instruction().unwrap().kind, Token::CellDec);
         assert_eq!(res.0.inner_instructions[1].get_loop().unwrap().id, 1);
         assert_eq!(res.0.inner_instructions[1].get_loop().unwrap().inner_instructions[0].get_basic_instruction().unwrap().kind, Token::MemNext);
@@ -525,9 +606,9 @@ mod tests {
         reducer = Reducer::new(instructions);
         assert_eq!(reducer.reduce_trivial(), true);
         assert_eq!(reducer.instructions.len(), 2);
-        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().get_kind(), Token::CellInc);
+        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().get_kind(), &Token::CellInc);
         assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().get_count(), 1);
-        assert_eq!(reducer.instructions[1].get_basic_instruction().unwrap().get_kind(), Token::Write);
+        assert_eq!(reducer.instructions[1].get_basic_instruction().unwrap().get_kind(), &Token::Write);
         assert_eq!(reducer.instructions[1].get_basic_instruction().unwrap().get_count(), 0);
     }
     

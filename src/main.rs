@@ -12,7 +12,6 @@ mod tokenization;
 mod parsing;
 mod compilation;
 mod parameters;
-mod stack;
 mod other;
 
 fn main() -> Result<(), Box<dyn Error>>{
@@ -21,7 +20,7 @@ fn main() -> Result<(), Box<dyn Error>>{
     let contents = std::fs::read_to_string(arguments.get_input_file())     // same representation as in C, 0th element is the executable's name
         .expect("Please provide a correct filename");
     
-    let mut tokens = tokenization::Token::tokenize(&contents);
+    let mut tokens = tokenization::Token::tokenize(contents);
     if !arguments.get_disable_reordering() {
         Token::reorder_opposites(&mut tokens);
     }
