@@ -125,14 +125,6 @@ fn file_is_brainfuck(s : &str) -> Result<String, String> {
     }
 }
 
-fn number_strictly_positive(s : &str) -> Result<usize, String> {
-    let x : i32 = s.parse().expect("Argument is not a number");
-    if x <= 0 {
-        return Err(format!("{x} is negative or null."));
-    }
-    Ok(x as usize)
-}
-
 
 #[cfg(test)]
 mod tests {
@@ -160,14 +152,5 @@ mod tests {
         assert!(file_is_brainfuck("src/main.rs").is_err());
         assert!(file_is_brainfuck("DoesNotExists.bf").is_err());
         assert_eq!(file_is_brainfuck("examples/hello world.bf").unwrap(), String::from("examples/hello world.bf"));
-    }
-    
-    #[test]
-    fn test_number_strictly_positive() {
-        assert!(number_strictly_positive("0").is_err());
-        for i  in 1..100 {
-            assert_eq!(number_strictly_positive(&i.to_string()).unwrap(), i);
-            assert!(number_strictly_positive(&(-(i as isize)).to_string()).is_err());
-        }
     }
 }

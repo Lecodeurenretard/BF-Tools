@@ -157,6 +157,7 @@ impl Generator {
         res
     }
     
+    #[allow(unused_mut)]
     pub fn gen_config_functions(&mut self, instructions : &Vec<Instruction>) -> String {
         let mut res = String::new();
         for instr in instructions {

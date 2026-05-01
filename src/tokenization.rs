@@ -34,12 +34,16 @@ impl<'a> TokenWrappedValue<'a> {
             _ => None
         }
     }
+    
+    #[allow(unused)]
     pub fn get_int(&self) -> Option<u32> {
         match self {
             TokenWrappedValue::Int(i) => Some(*i),
             _ => None
         }
     }
+    
+    #[allow(unused)]
     pub fn get_char(&self) -> Option<char> {
         match self {
             TokenWrappedValue::Char(c) => Some(*c),

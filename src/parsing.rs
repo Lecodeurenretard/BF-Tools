@@ -153,6 +153,7 @@ impl Literal {
         }
     }
     
+    #[allow(unused)]
     pub fn is_char(&self) -> bool {
         match self {
             Literal::Char(_) => true,
@@ -167,6 +168,7 @@ impl Literal {
         }
     }
     
+    #[allow(unused)]
     pub fn get_char(&self) -> Option<char> {
         match self {
             Literal::Char(val) => Some(*val),
@@ -316,12 +318,6 @@ impl Instruction {
             _                           => None
         }
     }
-    pub fn get_loop_mut(&mut self) -> Option<&mut Loop> {
-        match self {
-            Instruction::Loop(l) => Some(l),
-            _                               => None
-        }
-    }
     
     pub fn is_configuration_function(&self) -> bool {
         match self {
@@ -333,12 +329,6 @@ impl Instruction {
         match self {
             Instruction::Config(cf) => Some(cf),
             _                                        => None
-        }
-    }
-    pub fn get_configuration_function_mut(&mut self) -> Option<&mut ConfigFunction> {
-        match self {
-            Instruction::Config(cf) => Some(cf),
-            _                                            => None
         }
     }
 }
