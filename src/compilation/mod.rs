@@ -1,13 +1,13 @@
-use crate::parsing::{BasicInstruction, ConfigFunction, Instruction, Loop};
+use crate::parsing::{BasicInstruction, Instruction, Loop};
 use crate::tokenization::Token;
 
 pub struct Generator {
-    cell_count : usize,
+    cell_count : u32,
     bound_check : bool,
 }
 
 impl Generator {
-    pub fn new(cell_count : usize, bound_check : bool) -> Generator {
+    pub fn new(cell_count : u32, bound_check : bool) -> Generator {
         Generator { 
             cell_count,
             bound_check,
@@ -157,8 +157,29 @@ impl Generator {
         res
     }
     
-    fn gen_config_fun(&self, instr : &ConfigFunction) -> String {
-        panic!("Unknown configuration function: `{}()`.", instr.get_name());
+    pub fn gen_config_functions(&mut self, instructions : &Vec<Instruction>) -> String {
+        let mut res = String::new();
+        for instr in instructions {
+            let Some(config_fun) = instr.get_configuration_function() else {
+                break;
+            };
+            
+            if config_fun.get_name() == "#|M|=" {
+                if config_fun.get_args().len() != 1 {
+                    panic!("In function {}(): Wrong number of arguments, expected 1.", config_fun.get_name());
+                }
+                
+                if !config_fun.get_args()[0].is_int() {
+                    panic!("In function {}(): Wrong parameter type for argument 1, expected an integer.", config_fun.get_name());
+                }
+                self.cell_count = config_fun.get_args()[0].get_int().unwrap();
+                continue;
+            }
+            
+            panic!("Unknown configuration function: `{}()`.", config_fun.get_name());
+        }
+        
+        res
     }
     
     pub fn gen_init(&self) -> String {
@@ -216,8 +237,9 @@ impl Generator {
             return self.gen_loop(l);
         }
         
-        if let Some(config_fun) = instr.get_configuration_function() {
-            return  self.gen_config_fun(config_fun);
+        if instr.is_configuration_function() {
+            // They are handled in gen_config_functions() before the call to this function.
+            return String::new();
         }
         
         unreachable!("Instruction is not those categorises: loop, basic instruction or configuration function.");

@@ -1,4 +1,3 @@
-use core::hash;
 use std::cmp;
 use std::num::{IntErrorKind, ParseIntError};
 use crate::other::is_permutation;
@@ -16,14 +15,14 @@ pub enum Token {
     ConfigFunc(String),
     ParenOpen,
     ParenClose,
-    IntLit(usize),
+    IntLit(u32),
     CharLit(char),
 }
 
 #[derive(Debug)]
 pub enum TokenWrappedValue<'a> {
     Str(&'a String),
-    Int(usize),
+    Int(u32),
     Char(char),
     NULL,
 }
@@ -35,7 +34,7 @@ impl<'a> TokenWrappedValue<'a> {
             _ => None
         }
     }
-    pub fn get_int(&self) -> Option<usize> {
+    pub fn get_int(&self) -> Option<u32> {
         match self {
             TokenWrappedValue::Int(i) => Some(*i),
             _ => None
@@ -310,14 +309,14 @@ impl Token {
     pub fn get_wrapped_value<'a>(&'a self) -> TokenWrappedValue<'a> {
         match self {
             Token::ConfigFunc(s) => TokenWrappedValue::Str(s),
-            Token::IntLit(i)      => TokenWrappedValue::Int(*i),
+            Token::IntLit(i)        => TokenWrappedValue::Int(*i),
             Token::CharLit(c)      => TokenWrappedValue::Char(*c),
             _ => TokenWrappedValue::NULL
         }
     }
     
     #[cfg(test)]
-    fn test_unwrap_int(&self) -> usize {
+    fn test_unwrap_int(&self) -> u32 {
         self.get_wrapped_value().get_int().unwrap()
     }
     

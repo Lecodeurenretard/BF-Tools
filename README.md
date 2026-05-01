@@ -29,25 +29,42 @@ For example, this program asks for a value, doubles it and prints it:
 >.
 ```
 
-### Comments
+### Extended BF (EBF)
+The crates in this repository work with a modified version of BF: Extended Brainfuck. To .
+#### Comments
 Every character that is not any of the above is ignore as it is considered as comment.
 
 All character in curly braces `{}` is ignored regardless if it is an instruction or not.
 
+
+#### Configuration functions
+They are prebuilt, compilation-evalued functions. Their purpose is to setup the program.
+All of them can only be called once and before any other instruction, the order in which they are provided doesn't change their execution.
+
+##### List
+The _int_ type indicates a positive integer which is at most 2<sup>32</sup> - 1.  
+The _char_ type indicates that you can just put a character.
+
+Here is the order types are checked if multiple types can be inferred to an argument:
+1. _int_
+2. _char_
+
+_if you want to input a digit as a char, you can provide instead the ASCII code of the corresponding digit (0 is 30, 1 is 31, etc...)._
+
+> <b><code>#|M|=(<i>int</i>)</code></b>
+
+The number of cell the program can work with. Defaults to 128.
+
 ## Expected behaviors
-- The memory is always initialzed to all zeros when starting program.
-- Every cell in the memory is an 8 bit integer.
+- The memory is always initialzed to zero when starting program.
+- Every memory cell is stored as a byte.
 - Incrementing from a cell at 255 gives 0 and decrementing from 0 gives 255.
 
 ## Compiler usage
-### Arguments
+### Command-line arguments
 > **`--output`** (`-o`)
 
 The path to the compiled executable's name, defaults to the input file's name with the `.bf` extention stripped. If "./output" is provided, "./output.asm", "./output.o" and "./output" will be overwritten, depending on other arguments "./output.asm" and "./output.o" might also be deleted.
-
-> **`--cell-count`**
-
-The number of element the list should have. Defaults to 128.
 
 > **`-S`**  [flag]
 
@@ -97,7 +114,7 @@ Before reduction:
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++       >
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++               >
 +++++++++++++++++++++++++++++++++                                                                                  >
-++++++++++                                                                                                        >
+++++++++++                                                                                                         >
 
 <<<<<<<<<<<<<
 .>.>.>.>.>.>.>.>.>.>.>.>.

@@ -37,11 +37,6 @@ pub struct Parameters {
     /// Exposes the program to undefined behaviors.
     #[arg(long="no-bound-checking")]
     disable_bound_checking : bool,
-    
-    /// The number of cells the program have to allocate.
-    #[arg(long)]
-    #[arg(default_value_t = 128, value_parser=number_strictly_positive)]
-    cell_count : usize,
 }
 
 impl Parameters {
@@ -59,7 +54,6 @@ impl Parameters {
             disable_reordering: false,
             disable_simplification: false,
             disable_bound_checking: false,
-            cell_count: 128,
         }
     }
     
@@ -74,10 +68,6 @@ impl Parameters {
                 .0
                 .to_string()
         )
-    }
-    
-    pub fn get_cell_count(&self) -> usize {
-        self.cell_count
     }
     
     pub fn get_dbg_enabled(&self) -> bool {

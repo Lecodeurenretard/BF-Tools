@@ -4,11 +4,16 @@ use std::process::Output;
 use crate::compilation::Generator;
 use crate::parsing::Instruction;
 
-pub fn write_assembly(generator : Generator, instructions : Vec<Instruction>, output_file : &str) -> Result<(), std::io::Error> {
+pub fn write_assembly(mut generator : Generator, instructions : Vec<Instruction>, output_file : &str) -> Result<(), std::io::Error> {
     let mut output = std::fs::File::create(output_file)?;
+    let configuration_functions = generator.gen_config_functions(&instructions);
     
     output.write(
         generator.gen_init().as_bytes()
+    )?;
+    
+    output.write(
+        configuration_functions.as_bytes()
     )?;
     
     for instr in instructions {

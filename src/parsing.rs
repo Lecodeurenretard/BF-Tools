@@ -15,8 +15,8 @@ pub struct Loop {
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-enum Literal {
-    Int(usize),
+pub enum Literal {
+    Int(u32),
     Char(char),
 }
 
@@ -142,6 +142,36 @@ impl Loop {
         }
         
         panic!("Loop never closed.");
+    }
+}
+
+impl Literal {
+    pub fn is_int(&self) -> bool {
+        match self {
+            Literal::Int(_) => true,
+            _  => false
+        }
+    }
+    
+    pub fn is_char(&self) -> bool {
+        match self {
+            Literal::Char(_) => true,
+            _  => false
+        }
+    }
+    
+    pub fn get_int(&self) -> Option<u32> {
+        match self {
+            Literal::Int(val) => Some(*val),
+            _  => None
+        }
+    }
+    
+    pub fn get_char(&self) -> Option<char> {
+        match self {
+            Literal::Char(val) => Some(*val),
+            _  => None
+        }
     }
 }
 
