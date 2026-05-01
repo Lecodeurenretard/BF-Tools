@@ -49,7 +49,7 @@ Here is the order types are checked if multiple types can be inferred to an argu
 1. _int_
 2. _char_
 
-_if you want to input a digit as a char, you can provide instead the ASCII code of the corresponding digit (0 is 30, 1 is 31, etc...)._
+_if you want to input a digit as a char, you can provide instead the ASCII code of the corresponding digit (0 is 48, 1 is 49, etc...)._
 
 > <b><code>#|M|=(<i>int</i>)</code></b>
 

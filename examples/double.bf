@@ -1,4 +1,4 @@
 
-,.         Ask user for input and prints it
+,         Ask user for input
 [->++<]    Doubles the data the user gave
 >.         Prints the double
