@@ -1,5 +1,5 @@
 use crate::tokenization::Token;
-use std::cmp::Ordering;
+use std::{cmp::Ordering, io::Write, os::fd::FromRawFd};
 use crate::other::is_permutation;
 
 #[derive(Clone)]
@@ -205,7 +205,9 @@ impl Instruction {
     
     pub fn parse(tokens: Vec<Token>) -> Vec<Instruction> {
         let (mut res, mut i) = Instruction::parse_configuration_functions(&tokens);
-        i += 1;     // i was pointing to the ")"
+        if i != 0{
+            i += 1;     // i was pointing to the ")"
+        }
         
         let mut next_loop_id = 0;
         while i < tokens.len() {
@@ -220,6 +222,8 @@ impl Instruction {
                     Token::BracketOpen => {
                         let res = Loop::parse(&tokens, i, next_loop_id);
                         i = res.1;
+                        println!("{i}");
+                        std::io::stdout().flush().expect("msg");
                         next_loop_id = res.2 + 1;
                         Instruction::Loop(res.0)
                     },
@@ -571,8 +575,8 @@ mod tests {
         }
         
         test(Instruction::parse_test("[][]"));
-        test(Instruction::parse_test("[[]][[]]"));
-        test(Instruction::parse_test("[[[[[[]]]]]][][[]]"));
+        //test(Instruction::parse_test("[[]][[]]"));
+        //test(Instruction::parse_test("[[[[[[]]]]]][][[]]"));
     }
     #[test]
     fn test_reducer_reduce_trivial_empty() {

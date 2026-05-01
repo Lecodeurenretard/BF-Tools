@@ -88,13 +88,11 @@ impl Token {
             '.' => Some(Token::Write),
             '[' => Some(Token::BracketOpen),
             ']' => Some(Token::BracketClose),
-            '(' => Some(Token::ParenOpen),
-            ')' => Some(Token::ParenClose),
             _   => None
         }
     }
     
-    fn tokenize_config_function(s : &Vec<char>, start : usize) -> (Token, usize) {
+    fn tokenize_config_function_name(s : &Vec<char>, start : usize) -> (Token, usize) {
         if s.len() <= start {
             unreachable!("Starting index too high.");
         }
@@ -103,23 +101,26 @@ impl Token {
         }
         
         let mut buffer = String::from("#");
-        let mut i = start + 1;
+        let mut i = skip_whitespaces(s, start + 1);
         
-        while i < s.len() && s[i] != '('  && s[i] != ')'  && s[i] != '{' && s[i] != '}'  {
+        while i < s.len() && !"(){}".contains(s[i]) {
             buffer.push(s[i]);
-            i += 1;
+            i = skip_whitespaces(s, i + 1);
         }
         
         (Token::ConfigFunc(buffer), i)
     }
     
-    fn tokenize_literal(s : &Vec<char>, start : usize) -> (Token, usize) {
+    fn tokenize_literal_char(s : &Vec<char>, start : usize) -> (Token, usize) {
         if s.len() <= start {
             unreachable!("Starting index too high.");
         }
-        
-        if !s[start].is_numeric() {
-            return (Token::CharLit(s[start]), start);
+        return (Token::CharLit(s[start]), start + 1);
+    }
+    
+    fn tokenize_literal_int(s : &Vec<char>, start : usize) -> (Token, usize) {
+        if s.len() <= start {
+            unreachable!("Starting index too high.");
         }
         
         let mut i = start;
@@ -136,15 +137,25 @@ impl Token {
             },
             Err(err) => {
                 let err : ParseIntError = err;  // Rust can't infer err's type
+                if err.kind() == &IntErrorKind::Empty {
+                    unreachable!("The starting character is not a number.");
+                }
                 if err.kind() == &IntErrorKind::PosOverflow {
-                    panic!("Interger too big, numbers must be at most 255.");
+                    panic!("Number too big, numbers must be at most 2^64 (2^32 for 32-bits systems).");
                 }
                 
-                // other errors can't happened with the way 
+                // other errors are impossible by the way they are parsed.
                 unreachable!();
             }
         }
         (Token::IntLit(literal), i)
+    }
+    
+    fn tokenize_literal(s : &Vec<char>, start : usize) -> (Token, usize) {
+        if s[start].is_numeric() {
+            return Token::tokenize_literal_int(s, start);
+        }
+        Token::tokenize_literal_char(s, start)
     }
     
     fn tokenize_arguments_and_parenthesis(s : &Vec<char>, start : usize) -> Option<(Vec<Token>, usize)> {
@@ -166,16 +177,19 @@ impl Token {
             (lit, i) = Token::tokenize_literal(s, i);
             literals.push(lit);
             
+            dbg!(i);
+            dbg!(s[i]);
             i = skip_whitespaces(s, i);
+            if i >= s.len() {
+                panic!("Unclosed `(` in configuration function.");
+            }
+            if s[i] == ')' {
+                continue;
+            }
             if s[i] != ',' {
-                panic!("Expected a `,` or a `)` but found `{}`.", s[i]);
+                panic!("Expected a `,` or a `)` but found a {} at position {i}.", s[i]);
             }
             i = skip_whitespaces(s, i + 1);
-        }
-        
-        i = skip_whitespaces(s, i);
-        if i >= s.len() || s[i] != ')' {
-            return None;
         }
         
         let mut tokens = vec![Token::ParenOpen];
@@ -214,7 +228,7 @@ impl Token {
             
             if c == '#' {
                 let tok;
-                (tok, i) = Token::tokenize_config_function(&s, i);
+                (tok, i) = Token::tokenize_config_function_name(&s, i);
                 res.push(tok);
                 
                 if i >= s.len() {
@@ -301,11 +315,19 @@ impl Token {
         }
     }
     
-    pub fn compare_wrapped_values(&self, token : &Token) -> bool {
-        if self != token {
-            return false;
-        }
-        self.get_wrapped_value() == token.get_wrapped_value()
+    #[cfg(test)]
+    fn test_unwrap_int(&self) -> usize {
+        self.get_wrapped_value().get_int().unwrap()
+    }
+    
+    #[cfg(test)]
+    fn test_unwrap_char(&self) -> char {
+        self.get_wrapped_value().get_char().unwrap()
+    }
+    
+    #[cfg(test)]
+    fn test_unwrap_string(&self) -> String {
+        self.get_wrapped_value().get_str().unwrap().clone()
     }
 }
 
@@ -328,13 +350,13 @@ impl std::fmt::Display for Token {
 /// If there is nothing but whitespaces after s[start] returns s.len().
 /// If the starting index is too high, returns it.
 fn skip_whitespaces(s : &Vec<char>, start : usize) -> usize {
-    if start <= s.len() {
+    if start >= s.len() {
         return start;
     }
     
     for (i, c) in s[start..].iter().enumerate() {
-        if !c.is_whitespace() {
-            return i;
+        if !c.is_whitespace() && !c.is_control() {
+            return i + start;
         }
     }
     s.len()
@@ -348,8 +370,236 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_tokenize_func() {
-
+    fn test_tokenize_config_func_name_basic() {
+        let string = "#myFunc".chars().collect();
+        let (token, end) = Token::tokenize_config_function_name(&string, 0);
+        
+        assert_eq!(token, Token::ConfigFunc(String::from("")));
+        assert_eq!(token.test_unwrap_string(), String::from("#myFunc"));
+        assert_eq!(end, 7);
+    }
+    
+    #[test]
+    fn test_tokenize_config_func_name_empty() {
+        let string = "#".chars().collect();
+        let (token, end) = Token::tokenize_config_function_name(&string, 0);
+        
+        assert_eq!(token, Token::ConfigFunc(String::from("")));
+        assert_eq!(token.test_unwrap_string(), String::from("#"));
+        assert_eq!(end, 1);
+    }
+    
+    #[test]
+    fn test_tokenize_config_func_name_other_characters() {
+        let string = "#&'~à$?".chars().collect();
+        let (token, end) = Token::tokenize_config_function_name(&string, 0);
+        
+        assert_eq!(token, Token::ConfigFunc(String::from("")));
+        assert_eq!(token.test_unwrap_string(), String::from("#&'~à$?"));
+        assert_eq!(end, 7);
+    }
+    
+    #[test]
+    fn test_tokenize_config_func_name_instructions() {
+        let string = "#,[->+<].".chars().collect();
+        let (token, end) = Token::tokenize_config_function_name(&string, 0);
+        
+        assert_eq!(token, Token::ConfigFunc(String::from("")));
+        assert_eq!(token.test_unwrap_string(), String::from("#,[->+<]."));
+        assert_eq!(end, 9);
+    }
+    
+    #[test]
+    fn test_tokenize_config_func_name_whitespaces() {
+        let string1 = "# \n\t\0\r".chars().collect();
+        let (token1, end1) = Token::tokenize_config_function_name(&string1, 0);
+        
+        assert_eq!(token1, Token::ConfigFunc(String::from("")));
+        assert_eq!(token1.test_unwrap_string(), String::from("#"));
+        assert_eq!(end1, 6);
+        
+        let string2 = "# \n\t\0\r()".chars().collect();
+        let (token2, end2) = Token::tokenize_config_function_name(&string2, 0);
+        
+        assert_eq!(token1, token2);
+        assert_eq!(end1, end2);
+    }
+    
+    #[test]
+    fn test_tokenize_config_func_name_all() {
+        let string = "#How The $*!& Does The World Die Twice?!()".chars().collect();
+        let (token, end) = Token::tokenize_config_function_name(&string, 0);
+        
+        assert_eq!(token, Token::ConfigFunc(String::from("")));
+        assert_eq!(token.test_unwrap_string(), String::from("#HowThe$*!&DoesTheWorldDieTwice?!"));
+        assert_eq!(end, 40);
+    }
+    
+    #[test]
+    fn test_tokenize_int_literal_good() {
+        let (token, end_index) = Token::tokenize_literal_int(&"0".chars().collect(), 0);
+        assert_eq!(token, Token::IntLit(0));
+        assert_eq!(token.test_unwrap_int(), 0);
+        assert_eq!(end_index, 1);
+        
+        let (token, end_index) = Token::tokenize_literal_int(&"12345".chars().collect(), 0);
+        assert_eq!(token, Token::IntLit(0));
+        assert_eq!(token.test_unwrap_int(), 12345);
+        assert_eq!(end_index, 5);
+        
+        let (token, end_index) = Token::tokenize_literal_int(&"abc12345".chars().collect(), 3);
+        assert_eq!(token, Token::IntLit(0));
+        assert_eq!(token.test_unwrap_int(), 12345);
+        assert_eq!(end_index, 8);
+        
+        let (token, end_index) = Token::tokenize_literal_int(&"123abc456".chars().collect(), 0);
+        assert_eq!(token, Token::IntLit(0));
+        assert_eq!(token.test_unwrap_int(), 123);
+        assert_eq!(end_index, 3);
+    }
+    
+    #[test]
+    #[should_panic(expected = "index too high")]
+    fn test_tokenize_int_literal_bad_index() {
+        Token::tokenize_literal_int(&"0".chars().collect(), 10);
+    }
+    
+    #[test]
+    #[should_panic(expected = "index too high")]
+    fn test_tokenize_int_literal_empty() {
+        Token::tokenize_literal_int(&"".chars().collect(), 0);
+    }
+    
+    #[test]
+    #[should_panic(expected = "not a number")]
+    fn test_tokenize_int_literal_bad_character() {
+        Token::tokenize_literal_int(&"123a456".chars().collect(), 3);
+    }
+    
+    #[test]
+    #[should_panic(expected = "too big")]
+    fn test_tokenize_int_literal_overflow() {
+        Token::tokenize_literal_int(&format!("{}", 2_u128.pow(65)).chars().collect(), 0);
+    }
+    
+    #[test]
+    fn test_tokenize_literal() {
+        let s = "123abc1".chars().collect();
+        
+        assert_eq!(
+            Token::tokenize_literal(&s, 0),
+            Token::tokenize_literal_int(&s, 0),
+        );
+        assert_eq!(
+            Token::tokenize_literal(&s, 2),
+            Token::tokenize_literal_int(&s, 2),
+        );
+        assert_eq!(
+            Token::tokenize_literal(&s, 3),
+            Token::tokenize_literal_char(&s, 3),
+        );
+        assert_eq!(
+            Token::tokenize_literal(&s, 5),
+            Token::tokenize_literal_char(&s, 5),
+        );
+    }
+    
+    #[test]
+    fn test_tokenize_args_good() {
+        fn test(args : Vec<u8>) {
+            let mut string = String::from("(");
+            if args.is_empty() {
+                unreachable!();
+            }
+            if args.len() == 1 {
+                string = format!("({})", args[0]);
+            } else {
+                string += &args[0].to_string();
+                for arg in &args[1..] {
+                    string += &format!(", {arg}");
+                }
+                string += ")";
+            }
+            
+            let Some((tokens, end_index)) = Token::tokenize_arguments_and_parenthesis(
+                &string.chars().collect(),
+                0
+            ) else {
+                unreachable!("Looks like the test is broken...")
+            };
+            
+            let get_value = |tok : &Token| tok.test_unwrap_int();
+            assert_eq!(end_index, string.len());
+            assert_eq!(tokens.len(), args.len() + 2);
+            assert_eq!(tokens.first().unwrap(), &Token::ParenOpen);
+            assert_eq!(tokens.last().unwrap(), &Token::ParenClose);
+            
+            for i in 1..tokens.len()-1 {
+                assert_eq!(tokens[i], Token::IntLit(0));
+                assert_eq!(get_value(&tokens[i]), args[i-1].into());
+            }
+        }
+        test(vec![0]);
+        test(vec![0, 1, 2]);
+        
+        // testing ',)' behavior
+        let Some(expected) = Token::tokenize_arguments_and_parenthesis(
+            &vec!['(', '1', ',', '\n', '2', ')'],
+            0
+        ) else {
+            unreachable!("Broken test...");
+        };
+        let Some(tested) = Token::tokenize_arguments_and_parenthesis(
+            &vec!['(', '1', ',', '\n', '2', ',', ')'],
+            0
+        ) else {
+            unreachable!("Broken test...");
+        };
+        
+        assert_eq!(tested.0, expected.0);
+        assert_eq!(tested.1, expected.1 + 1);   // the ',' was added
+    }
+    
+    #[test]
+    #[should_panic(expected = "too high")]
+    fn test_tokenize_args_too_high() {
+        Token::tokenize_arguments_and_parenthesis(
+            &vec!['(', ')'],
+            10
+        );
+    }
+    
+    #[test]
+    #[should_panic(expected = "too high")]
+    fn test_tokenize_args_unclosed() {
+        Token::tokenize_arguments_and_parenthesis(
+            &vec!['(', '1', ',', '\n', '2', ',', ' '],
+            10
+        );
+    }
+    
+    #[test]
+    fn test_tokenize_args_bad() {
+        assert_eq!(
+            Token::tokenize_arguments_and_parenthesis(
+                &vec![')'],
+                0
+            ),
+            None
+        );
+    }
+    
+    #[test]
+    fn test_tokenize_args_empty() {
+        let (tok, end) = Token::tokenize_arguments_and_parenthesis(
+            &vec!['(', ')'],
+            0
+        ).unwrap();
+        assert_eq!(tok.len(), 2);
+        assert_eq!(end, 2);
+        assert_eq!(tok[0], Token::ParenOpen);
+        assert_eq!(tok[1], Token::ParenClose);
+        return;
     }
     
     #[test]
@@ -358,12 +608,40 @@ mod tests {
             Token::test_tokenize("><+-,.[]"),
             vec![Token::MemNext, Token::MemPrev, Token::CellInc, Token::CellDec, Token::Read, Token::Write, Token::BracketOpen, Token::BracketClose]
         );
+        
+        let tokens = Token::test_tokenize("#Myfunc(1, a, 2, b)");
+        assert_eq!(
+            tokens,
+            vec![Token::ConfigFunc(String::from("")), Token::ParenOpen, Token::IntLit(0), Token::CharLit('0'), Token::IntLit(0), Token::CharLit('0'), Token::ParenClose]
+        );
+        assert_eq!(
+            tokens[0].test_unwrap_string(),
+            "#Myfunc"
+        );
+        assert_eq!(
+            tokens[2].test_unwrap_int(),
+            1
+        );
+        assert_eq!(
+            tokens[3].test_unwrap_char(),
+            'a'
+        );
+        assert_eq!(
+            tokens[4].test_unwrap_int(),
+            2
+        );
+        assert_eq!(
+            tokens[5].test_unwrap_char(),
+            'b'
+        );
+        
+        assert_eq!(Token::test_tokenize("{#func(a, b, c)>-<}"), vec![]);
     }
     
     #[test]
     fn test_tokenize_comments() {
         assert_eq!(
-            Token::test_tokenize("I love sentences, they let me write tests with punctuation. Even tough there is no '+' nor '>' I'll take it."),
+            Token::test_tokenize("I love sentences, they let me write tests with punctuation. Even tough there is no '+' nor '>'."),
             vec![Token::Read, Token::Write, Token::CellInc, Token::MemNext, Token::Write]
         );
         assert_eq!(
@@ -502,5 +780,50 @@ mod tests {
         assert_eq!(tokens[4], Token::MemNext);
         assert_eq!(tokens[5], Token::MemPrev);
         assert_eq!(tokens[6], Token::MemPrev);
+    }
+    
+    #[test]
+    fn test_skip_whitespaces() {
+        fn to_vec(s : &str) -> Vec<char> {
+            return  s.chars().collect();
+        }
+        
+        assert_eq!(
+            skip_whitespaces(&to_vec(""), 0),
+            0
+        );
+        assert_eq!(
+            skip_whitespaces(&to_vec("N"), 0),
+            0
+        );
+        assert_eq!(
+            skip_whitespaces(&to_vec(" N"), 0),
+            1
+        );
+        assert_eq!(
+            skip_whitespaces(&to_vec("N "), 0),
+            0
+        );
+        assert_eq!(
+            skip_whitespaces(&to_vec("\t\n\r noWhiteSpace"), 0),
+            4
+        );
+        assert_eq!(
+            skip_whitespaces(&to_vec("\t\n\r yes whitespace"), 0),
+            4
+        );
+        
+        assert_eq!(
+            skip_whitespaces(&to_vec("Oi"), 10),
+            10
+        );
+        assert_eq!(
+            skip_whitespaces(&to_vec("\t\n\r noWhiteSpace"), 2),
+            4
+        );
+        assert_eq!(
+            skip_whitespaces(&to_vec("0, 1"), 1),
+            1
+        );
     }
 }
