@@ -1,8 +1,9 @@
+use core::hash;
 use std::cmp;
 use std::num::{IntErrorKind, ParseIntError};
 use crate::other::is_permutation;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Hash, Debug)]
 pub enum Token {
     MemNext,
     MemPrev,
@@ -19,6 +20,7 @@ pub enum Token {
     CharLit(char),
 }
 
+#[derive(Debug)]
 pub enum TokenWrappedValue<'a> {
     Str(&'a String),
     Int(usize),
@@ -177,8 +179,6 @@ impl Token {
             (lit, i) = Token::tokenize_literal(s, i);
             literals.push(lit);
             
-            dbg!(i);
-            dbg!(s[i]);
             i = skip_whitespaces(s, i);
             if i >= s.len() {
                 panic!("Unclosed `(` in configuration function.");
@@ -237,6 +237,7 @@ impl Token {
                 if let Some(pair) = Token::tokenize_arguments_and_parenthesis(&s, i) {
                     res.extend(pair.0);
                     i = pair.1;
+                    continue;
                 }
             }
             i += 1;
@@ -634,8 +635,25 @@ mod tests {
             tokens[5].test_unwrap_char(),
             'b'
         );
+    }
+    
+    #[test]
+    fn test_tokenize_many_config_fn() {
+        let tokens = Token::test_tokenize("#f1()#f2()>>");
+        assert_eq!(tokens.len(), 8);
         
-        assert_eq!(Token::test_tokenize("{#func(a, b, c)>-<}"), vec![]);
+        assert_eq!(tokens[0], Token::ConfigFunc(String::from("")));
+        assert_eq!(tokens[0].test_unwrap_string(), String::from("#f1"));
+        assert_eq!(tokens[1], Token::ParenOpen);
+        assert_eq!(tokens[2], Token::ParenClose);
+        
+        assert_eq!(tokens[3], Token::ConfigFunc(String::from("")));
+        assert_eq!(tokens[3].test_unwrap_string(), String::from("#f2"));
+        assert_eq!(tokens[4], Token::ParenOpen);
+        assert_eq!(tokens[5], Token::ParenClose);
+        
+        assert_eq!(tokens[6], Token::MemNext);
+        assert_eq!(tokens[7], Token::MemNext);
     }
     
     #[test]
@@ -656,6 +674,10 @@ mod tests {
         assert_eq!(
             Token::test_tokenize(".+ {Comment >-<} -[]"),
             vec![Token::Write, Token::CellInc, Token::CellDec, Token::BracketOpen, Token::BracketClose]
+        );
+        assert_eq!(
+            Token::test_tokenize("{#func(a, b, c)>-<}"),
+            vec![]
         );
     }
     

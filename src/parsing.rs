@@ -1,5 +1,5 @@
 use crate::tokenization::Token;
-use std::{cmp::Ordering, io::Write, os::fd::FromRawFd};
+use std::cmp::Ordering;
 use crate::other::is_permutation;
 
 #[derive(Clone)]
@@ -14,7 +14,7 @@ pub struct Loop {
     id : usize,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum Literal {
     Int(usize),
     Char(char),
@@ -152,6 +152,47 @@ impl ConfigFunction {
     pub fn get_args(&self) -> &Vec<Literal> {
         &self.args
     }
+
+    pub fn parse_configuration_function(tokens : &Vec<Token>, start : usize) -> (ConfigFunction, usize) {
+        if tokens[start] != Token::ConfigFunc(String::from("")) {
+            unreachable!();
+        }
+        
+        let name = tokens[start].get_wrapped_value()
+            .get_str()
+            .unwrap()
+            .clone();       //bad lifetime
+        
+        let mut i = start + 1;
+        if i >= tokens.len() {
+            panic!("Expected a `(` after the name of a configuration function but arrived at end of file.");
+        }
+        if tokens[i] != Token::ParenOpen {
+            panic!("Expected a `(` after the name of a configuration function but found `{}`.", tokens[i]);
+        }
+        i += 1;
+        
+        let mut args = Vec::new();
+        while i < tokens.len() {
+            args.push(
+                match tokens[i] {
+                    Token::IntLit(i) => Literal::Int(i),
+                    Token::CharLit(c) => Literal::Char(c),
+                    _ => break
+                }
+            );
+            i += 1;
+        }
+        
+        if i >= tokens.len() {
+            panic!("Expected a `)` but arrived at end of file.");
+        }
+        if tokens[i] != Token::ParenClose {
+            panic!("Expected a `)` but found token `{}` instead.", tokens[i]);
+        }
+        
+        (ConfigFunction { name, args }, i + 1)
+    }
 }
 
 impl Instruction {
@@ -161,69 +202,43 @@ impl Instruction {
     }
     
     fn parse_configuration_functions(tokens : &Vec<Token>) -> (Vec<Instruction>, usize) {
-        let mut already_parsed = Vec::new();
-        let mut res = Vec::new();
+        let mut parsed_functions = std::collections::HashSet::new();
         let mut i = 0;
-        
-        while i < tokens.len() && tokens[i] == Token::ConfigFunc(String::from("")) {
-            let name = tokens[i].get_wrapped_value()
-                .get_str()
-                .unwrap()
-                .clone();
-            
-            let wrapped = tokens[i].get_wrapped_value();
-            if already_parsed.contains(&wrapped) {
-                panic!("Configuration function `{}()` called at least two times.", name);
-            }
-            already_parsed.push(wrapped);
-            
-            i += 1;
-            
-            let mut args = Vec::new();
-            while i < tokens.len() {
-                args.push(
-                    match tokens[i] {
-                        Token::IntLit(i) => Literal::Int(i),
-                        Token::CharLit(c) => Literal::Char(c),
-                        _ => break
-                    }
-                );
-                i += 1;
+        let mut res = Vec::new();
+        while i < tokens.len() {
+            if tokens[i] != Token::ConfigFunc(String::from("")) {
+                break;
             }
             
-            i +=1;
-            if i >= tokens.len() || tokens[i] != Token::ParenClose {
-                panic!("Unmatched parenthesis in configuration function call.");
+            if parsed_functions.contains(&&tokens[i]) {
+                panic!("This function has already been called.")
             }
-            res.push(Instruction::Config(ConfigFunction { name, args }));
+            parsed_functions.insert(&tokens[i]);
             
-            i += 1;
+            let config;
+            (config, i) = ConfigFunction::parse_configuration_function(tokens, i);
+            
+            res.push(Instruction::Config(config));
         }
-        
         (res, i)
     }
     
     pub fn parse(tokens: Vec<Token>) -> Vec<Instruction> {
         let (mut res, mut i) = Instruction::parse_configuration_functions(&tokens);
-        if i != 0{
-            i += 1;     // i was pointing to the ")"
-        }
         
         let mut next_loop_id = 0;
         while i < tokens.len() {
             res.push(
                 match tokens[i] {
-                    Token::MemNext   => Instruction::Basic(BasicInstruction{ kind:  Token::MemNext, count: 1}),
-                    Token::MemPrev   => Instruction::Basic(BasicInstruction{ kind:  Token::MemPrev, count: 1}),
-                    Token::CellInc   => Instruction::Basic(BasicInstruction{ kind:  Token::CellInc, count: 1}),
-                    Token::CellDec   => Instruction::Basic(BasicInstruction{ kind:  Token::CellDec, count: 1}),
-                    Token::Read      => Instruction::Basic(BasicInstruction{ kind:  Token::Read,    count: 1}),
-                    Token::Write     => Instruction::Basic(BasicInstruction{ kind:  Token::Write,   count: 1}),
+                    Token::MemNext   => Instruction::Basic(BasicInstruction{ kind:  Token::MemNext, count: 1 }),
+                    Token::MemPrev   => Instruction::Basic(BasicInstruction{ kind:  Token::MemPrev, count: 1 }),
+                    Token::CellInc   => Instruction::Basic(BasicInstruction{ kind:  Token::CellInc, count: 1 }),
+                    Token::CellDec   => Instruction::Basic(BasicInstruction{ kind:  Token::CellDec, count: 1 }),
+                    Token::Read      => Instruction::Basic(BasicInstruction{ kind:  Token::Read,    count: 1 }),
+                    Token::Write     => Instruction::Basic(BasicInstruction{ kind:  Token::Write,   count: 1 }),
                     Token::BracketOpen => {
                         let res = Loop::parse(&tokens, i, next_loop_id);
                         i = res.1;
-                        println!("{i}");
-                        std::io::stdout().flush().expect("msg");
                         next_loop_id = res.2 + 1;
                         Instruction::Loop(res.0)
                     },
@@ -493,6 +508,49 @@ mod tests {
     use super::*;
     
     #[test]
+    fn test_config_function_parse_good() {
+        let (function, end) = ConfigFunction::parse_configuration_function(&Token::test_tokenize("#jojo()"), 0);
+        assert_eq!(end, 3);
+        assert_eq!(function.name, String::from("#jojo"));
+        assert_eq!(function.args.len(), 0);
+        
+        let (function, end) = ConfigFunction::parse_configuration_function(&Token::test_tokenize("#>!(a,b,1)"), 0);
+        assert_eq!(end, 6);
+        assert_eq!(function.name, String::from("#>!"));
+        assert_eq!(function.args.len(), 3);
+        assert_eq!(function.args[0], Literal::Char('a'));
+        assert_eq!(function.args[1], Literal::Char('b'));
+        assert_eq!(function.args[2], Literal::Int(1));
+    }
+    
+    #[test]
+    #[should_panic(expected = "Expected a `(`")]
+    fn test_config_function_parse_no_opening_paren1() {
+        ConfigFunction::parse_configuration_function(
+            &vec![Token::ConfigFunc(String::from("#fn"))],
+            0
+        );
+    }
+    
+    #[test]
+    #[should_panic(expected = "Expected a `(`")]
+    fn test_config_function_parse_no_opening_paren2() {
+        ConfigFunction::parse_configuration_function(
+            &vec![Token::ConfigFunc(String::from("#fn")), Token::ParenClose],
+            0
+        );
+    }
+    
+    #[test]
+    #[should_panic(expected = "Expected a `)`")]
+    fn test_config_function_parse_no_closing_paren() {
+        ConfigFunction::parse_configuration_function(
+            &vec![Token::ConfigFunc(String::from("#fn")), Token::ParenOpen],
+            0
+        );
+    }
+    
+    #[test]
     #[should_panic(expected = "too high")]
     fn test_loop_parse_start_too_high() {
         Loop::parse(&vec![Token::BracketOpen, Token::BracketClose], 10, 0);
@@ -550,11 +608,17 @@ mod tests {
     }
     
     #[test]
+    fn test_instruction_parse_loop_config() {
+        Instruction::parse_test("#config()");
+    }
+    
+    #[test]
     fn test_instruction_parse() {
         Instruction::parse_test("I love programming, brainfuck and punctuation. + something - someone");
         Instruction::parse_test("[]");
         Instruction::parse_test("[+-,.]");
         Instruction::parse_test("[+-,.[]]");
+        Instruction::parse_test("#1()#2()[+-,.[]]");
     }
     
     #[test]
