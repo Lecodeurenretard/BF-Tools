@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn Error>>{
     let output_file_o   = format!("{}.o"  , arguments.get_output_file());
     let output_file     = arguments.get_output_file();
     write_assembly(
-        Generator::new(arguments.get_cell_count(), !arguments.get_disable_bound_checking()),
+        Generator::new(128, !arguments.get_disable_bound_checking()),
         instructions,
         &output_file_asm,
     )?;
