@@ -141,4 +141,10 @@ After reduction:
 ```
 
 
+## Building from source
+Just `cargo build`
+
+To run tests you can run `cargo test` for unit tests and `examples/test_examples.sh` to test the programs in [examples](examples).
+
+
 <!--Neat site: https://esolangs.org/wiki/Talk:Brainfuck -->
