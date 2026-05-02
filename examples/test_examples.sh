@@ -1,5 +1,28 @@
 #!/bin/bash
 
+echo "Testing C-String.bf"
+cargo run --release -- double.bf -o test 1> /dev/null || exit 1
+
+echo -n "Hello" > input
+echo -n "Hello" > expected
+./test < input > output
+diff --brief output expected > /dev/null
+if [ $? -ne 0 ]; then
+	echo "Unexpected output from Reading string "Hello":" 1>&2
+	cat output 1>&2
+	exit 2
+fi
+
+echo -n "Brainfuck" > input
+echo -n "Brainfuck" > expected
+./test < input > output
+diff --brief output expected > /dev/null
+if [ $? -ne 0 ]; then
+	echo "Unexpected output from Reading string "Hello":" 1>&2
+	cat output 1>&2
+	exit 2
+fi
+
 echo "Testing double.bf"
 cargo run --release -- double.bf -o test 1> /dev/null || exit 1
 
