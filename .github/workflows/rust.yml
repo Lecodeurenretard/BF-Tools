@@ -23,6 +23,5 @@ jobs:
     - name: Run compiler tests
       run: cargo test --verbose
     - name: Run compiled example tests
-      run: |
-        ./test_examples.sh
+      run: python3 test.py
 
