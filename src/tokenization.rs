@@ -202,7 +202,7 @@ impl Token {
         Some((tokens, i + 1))
     }
     
-    pub fn tokenize(s : String) -> Vec<Token> {
+    pub fn tokenize(s : String, allow_ebf : bool) -> Vec<Token> {
         let s : Vec<char> = s.chars().collect();
         
         let mut res : Vec<Token> = Vec::new();
@@ -211,16 +211,18 @@ impl Token {
         let mut i : usize = 0;
         while i < s.len() {
             let c = s[i];
-            if c == '}' {
-                if !commented {
-                    panic!("A comment was closed but never opened.")
+            if allow_ebf{
+                if c == '}' {
+                    if !commented {
+                        panic!("A comment was closed but never opened.")
+                    }
+                    commented = false;
                 }
-                commented = false;
-            }
-            if c == '{' { commented = true; }
-            if commented {
-                i += 1;
-                continue;
+                if c == '{' { commented = true; }
+                if commented {
+                    i += 1;
+                    continue;
+                }
             }
             
             if let Some(token) = Token::tokenize_single_char(c) {
@@ -229,7 +231,7 @@ impl Token {
                 continue;
             };
             
-            if c == '#' {
+            if allow_ebf && c == '#' {
                 let tok;
                 (tok, i) = Token::tokenize_config_function_name(&s, i);
                 res.push(tok);
@@ -252,13 +254,13 @@ impl Token {
     }
     
     #[cfg(test)]
-    pub fn test_tokenize(s : &str) -> Vec<Token> {
-        Token::tokenize(String::from(s))
+    pub fn test_tokenize(s : &str, with_ebf : bool) -> Vec<Token> {
+        Token::tokenize(String::from(s), with_ebf)
     }
     
     #[cfg(test)]
-    pub fn tokenize_and_reduce(s : &str) -> Vec<Token> {
-        let mut res = Token::test_tokenize(s);
+    pub fn tokenize_and_reduce(s : &str, with_ebf : bool) -> Vec<Token> {
+        let mut res = Token::test_tokenize(s, with_ebf);
         Token::reorder_opposites(&mut res);
         res
     }
@@ -608,16 +610,24 @@ mod tests {
     
     #[test]
     fn test_tokenize() {
+        let tokens = Token::test_tokenize("><+-,.[]", false);
         assert_eq!(
-            Token::test_tokenize("><+-,.[]"),
+            tokens,
             vec![Token::MemNext, Token::MemPrev, Token::CellInc, Token::CellDec, Token::Read, Token::Write, Token::BracketOpen, Token::BracketClose]
         );
+        assert_eq!(tokens, Token::test_tokenize("><+-,.[]", true));
         
-        let tokens = Token::test_tokenize("#Myfunc(1, a, 2, b)");
+        assert_eq!(
+            Token::test_tokenize("#Myfunc(1, a, 2, b)", false),
+            vec![Token::Read, Token::Read, Token::Read]
+        );
+        
+        let tokens = Token::test_tokenize("#Myfunc(1, a, 2, b)", true);
         assert_eq!(
             tokens,
             vec![Token::ConfigFunc(String::from("")), Token::ParenOpen, Token::IntLit(0), Token::CharLit('0'), Token::IntLit(0), Token::CharLit('0'), Token::ParenClose]
         );
+        
         assert_eq!(
             tokens[0].test_unwrap_string(),
             "#Myfunc"
@@ -642,7 +652,8 @@ mod tests {
     
     #[test]
     fn test_tokenize_many_config_fn() {
-        let tokens = Token::test_tokenize("#f1()#f2()>>");
+        let tokens = Token::test_tokenize("#f1()#f2()>>", true);
+        assert_eq!(tokens, Token::test_tokenize("#f1()#f2()>>", true));
         assert_eq!(tokens.len(), 8);
         
         assert_eq!(tokens[0], Token::ConfigFunc(String::from("")));
@@ -662,24 +673,24 @@ mod tests {
     #[test]
     fn test_tokenize_comments() {
         assert_eq!(
-            Token::test_tokenize("I love sentences, they let me write tests with punctuation. Even tough there is no '+' nor '>'."),
+            Token::test_tokenize("I love sentences, they let me write tests with punctuation. Even tough there is no '+' nor '>'.", false),
             vec![Token::Read, Token::Write, Token::CellInc, Token::MemNext, Token::Write]
         );
         assert_eq!(
-            Token::test_tokenize("This time let's play with '{', '}' and '.'"),
+            Token::test_tokenize("This time let's play with '{', '}' and '.'", true),
             vec![Token::Write]
         );
         assert_eq!(
-            Token::test_tokenize("Wrapping up a link in a comment. {https://github.com/Lecodeurenretard/BF-Tools/tree/master}"),
+            Token::test_tokenize("Wrapping up a link in a comment. {https://github.com/Lecodeurenretard/BF-Tools/tree/master}", true),
             vec![Token::Write]
         );
         
         assert_eq!(
-            Token::test_tokenize(".+ {Comment >-<} -[]"),
+            Token::test_tokenize(".+ {Comment >-<} -[]", true),
             vec![Token::Write, Token::CellInc, Token::CellDec, Token::BracketOpen, Token::BracketClose]
         );
         assert_eq!(
-            Token::test_tokenize("{#func(a, b, c)>-<}"),
+            Token::test_tokenize("{#func(a, b, c)>-<}", true),
             vec![]
         );
     }
@@ -687,13 +698,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "never opened")]
     fn test_tokenize_comments_not_opened() {
-        Token::test_tokenize("+,}");
+        Token::test_tokenize("+,}", true);
     }
     
     #[test]
     #[should_panic(expected = "never closed")]
     fn test_tokenize_comments_not_closed() {
-        Token::test_tokenize("{+,");
+        Token::test_tokenize("{+,", true);
     }
     
     #[test]

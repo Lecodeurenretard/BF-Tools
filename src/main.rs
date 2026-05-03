@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn Error>>{
     let contents = std::fs::read_to_string(arguments.get_input_file())
         .expect("Please provide a correct filename. You may also not have the necessary permissions.");
     
-    let mut tokens = tokenization::Token::tokenize(contents);
+    let mut tokens = tokenization::Token::tokenize(contents, !arguments.get_disable_ebf());
     if !arguments.get_disable_reordering() {
         Token::reorder_opposites(&mut tokens);
     }

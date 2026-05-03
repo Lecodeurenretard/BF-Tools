@@ -229,8 +229,8 @@ impl ConfigFunction {
 
 impl Instruction {
     #[cfg(test)]
-    fn parse_test(s : &str) -> Vec<Instruction> {
-        Instruction::parse(Token::tokenize(String::from(s)))
+    fn parse_test(s : &str, with_ebf : bool) -> Vec<Instruction> {
+        Instruction::parse(Token::tokenize(String::from(s), with_ebf))
     }
     
     fn parse_configuration_functions(tokens : &Vec<Token>) -> (Vec<Instruction>, usize) {
@@ -342,10 +342,10 @@ pub struct Reducer {
 
 impl Reducer {
     #[cfg(test)]
-    fn test_reduced(s : &str) -> Vec<Instruction> {
+    fn test_reduced(s : &str, with_ebf : bool) -> Vec<Instruction> {
         let mut reducer = Reducer::new(
             Instruction::parse(
-                Token::tokenize_and_reduce(s)
+                Token::tokenize_and_reduce(s, with_ebf)
             )
         );
         reducer.reduce();
@@ -529,12 +529,18 @@ mod tests {
     
     #[test]
     fn test_config_function_parse_good() {
-        let (function, end) = ConfigFunction::parse_configuration_function(&Token::test_tokenize("#jojo()"), 0);
+        let (function, end) = ConfigFunction::parse_configuration_function(
+            &Token::test_tokenize("#jojo()", true),
+            0
+        );
         assert_eq!(end, 3);
         assert_eq!(function.name, String::from("#jojo"));
         assert_eq!(function.args.len(), 0);
         
-        let (function, end) = ConfigFunction::parse_configuration_function(&Token::test_tokenize("#>!(a,b,1)"), 0);
+        let (function, end) = ConfigFunction::parse_configuration_function(
+            &Token::test_tokenize("#>!(a,b,1)",true),
+            0
+        );
         assert_eq!(end, 6);
         assert_eq!(function.name, String::from("#>!"));
         assert_eq!(function.args.len(), 3);
@@ -624,21 +630,21 @@ mod tests {
     #[test]
     #[should_panic(expected = "Loop never opened.")]
     fn test_instruction_parse_loop_never_opened() {
-        Instruction::parse_test("+,]");
+        Instruction::parse_test("+,]", false);
     }
     
     #[test]
     fn test_instruction_parse_loop_config() {
-        Instruction::parse_test("#config()");
+        Instruction::parse_test("#config()", true);
     }
     
     #[test]
     fn test_instruction_parse() {
-        Instruction::parse_test("I love programming, brainfuck and punctuation. + something - someone");
-        Instruction::parse_test("[]");
-        Instruction::parse_test("[+-,.]");
-        Instruction::parse_test("[+-,.[]]");
-        Instruction::parse_test("#1()#2()[+-,.[]]");
+        Instruction::parse_test("I love programming, brainfuck and punctuation. + something - someone", false);
+        Instruction::parse_test("[]", false);
+        Instruction::parse_test("[+-,.]", false);
+        Instruction::parse_test("[+-,.[]]", false);
+        Instruction::parse_test("#1()#2()[+-,.[]]", true);
     }
     
     #[test]
@@ -658,9 +664,9 @@ mod tests {
             }
         }
         
-        test(Instruction::parse_test("[][]"));
-        //test(Instruction::parse_test("[[]][[]]"));
-        //test(Instruction::parse_test("[[[[[[]]]]]][][[]]"));
+        test(Instruction::parse_test("[][]", false));
+        test(Instruction::parse_test("[[]][[]]", false));
+        test(Instruction::parse_test("[[[[[[]]]]]][][[]]", false));
     }
     #[test]
     fn test_reducer_reduce_trivial_empty() {
@@ -715,7 +721,7 @@ mod tests {
     
     #[test]
     fn test_reducer_reduce_consecutives_reduce() {
-        let instructions = Instruction::parse_test("----");
+        let instructions = Instruction::parse_test("----", false);
         let mut reducer = Reducer::new(instructions);
         assert_eq!(reducer.reduce_consecutives(), true);
         assert_eq!(reducer.instructions.len(), 4);
@@ -727,7 +733,7 @@ mod tests {
     
     #[test]
     fn test_reducer_reduce_consecutives_no_reduce() {
-        let instructions = Instruction::parse_test("->,.");
+        let instructions = Instruction::parse_test("->,.", false);
         let mut reducer = Reducer::new(instructions);
         
         assert_eq!(reducer.reduce_consecutives(), false);
@@ -741,7 +747,7 @@ mod tests {
     
     #[test]
     fn test_reducer_reduce_opposites_reduce1() {
-        let instructions = Instruction::parse_test("<>");
+        let instructions = Instruction::parse_test("<>", false);
         let mut reducer = Reducer::new(instructions);
         assert_eq!(reducer.reduce_opposites(), true);
         assert_eq!(reducer.instructions.len(), 2);
@@ -789,7 +795,7 @@ mod tests {
     
     #[test]
     fn test_reducer_reduce1() {
-        let reduced = Reducer::test_reduced("-----++");
+        let reduced = Reducer::test_reduced("-----++", false);
         assert_eq!(reduced.len(), 1);
         assert_eq!(reduced[0].get_basic_instruction().unwrap().kind, Token::CellDec);
         assert_eq!(reduced[0].get_basic_instruction().unwrap().count, 3);
@@ -797,7 +803,7 @@ mod tests {
     
     #[test]
     fn test_reducer_reduce2() {
-        let reduced = Reducer::test_reduced(">>+++++[<]");
+        let reduced = Reducer::test_reduced(">>+++++[<]", false);
         assert_eq!(reduced.len(), 3);
         
         fn get_basic(instr : &Instruction) -> &BasicInstruction {

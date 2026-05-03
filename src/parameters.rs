@@ -37,6 +37,10 @@ pub struct Parameters {
     /// Exposes the program to undefined behaviors.
     #[arg(long="no-bound-checking")]
     disable_bound_checking : bool,
+    
+    /// Compile the program as a regular brainfuck program.
+    #[arg(long="no-extention")]
+    disable_ebf : bool,
 }
 
 impl Parameters {
@@ -54,6 +58,7 @@ impl Parameters {
             disable_reordering: false,
             disable_simplification: false,
             disable_bound_checking: false,
+            disable_ebf: false,
         }
     }
     
@@ -93,6 +98,10 @@ impl Parameters {
     
     pub fn get_disable_bound_checking(&self) -> bool {
         self.disable_bound_checking
+    }
+    
+    pub fn get_disable_ebf(&self) -> bool {
+        self.disable_ebf
     }
 }
 
