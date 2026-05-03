@@ -4,7 +4,7 @@ use clap::Parser;
 
 use crate::parameters::Parameters;
 use crate::compilation::Generator;
-use crate::other::{write_assembly, check_cmd_output};
+use crate::other::*;
 use crate::parsing::Instruction;
 use crate::tokenization::Token;
 
@@ -17,8 +17,8 @@ mod other;
 fn main() -> Result<(), Box<dyn Error>>{
     let arguments = Parameters::parse();
     
-    let contents = std::fs::read_to_string(arguments.get_input_file())     // same representation as in C, 0th element is the executable's name
-        .expect("Please provide a correct filename");
+    let contents = std::fs::read_to_string(arguments.get_input_file())
+        .expect("Please provide a correct filename. You may also not have the necessary permissions.");
     
     let mut tokens = tokenization::Token::tokenize(contents);
     if !arguments.get_disable_reordering() {
@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn Error>>{
     let output_file_o   = format!("{}.o"  , arguments.get_output_file());
     let output_file     = arguments.get_output_file();
     write_assembly(
-        Generator::new(128, !arguments.get_disable_bound_checking()),
+        Generator::new(!arguments.get_disable_bound_checking()),
         instructions,
         &output_file_asm,
     )?;

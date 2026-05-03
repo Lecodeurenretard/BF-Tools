@@ -7,10 +7,10 @@ pub struct Generator {
 }
 
 impl Generator {
-    pub fn new(cell_count : u32, bound_check : bool) -> Generator {
+    pub fn new(enable_ebound_check : bool) -> Generator {
         Generator { 
-            cell_count,
-            bound_check,
+            cell_count: 128,
+            bound_check: enable_ebound_check,
         }
     }
     
@@ -157,7 +157,7 @@ impl Generator {
         res
     }
     
-    #[allow(unused_mut)]
+    #[allow(unused_mut)]    // may add more functions later
     pub fn gen_config_functions(&mut self, instructions : &Vec<Instruction>) -> String {
         let mut res = String::new();
         for instr in instructions {

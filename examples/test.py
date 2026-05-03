@@ -73,7 +73,7 @@ print()
 print("Testing hello world optimized.bf")
 compile_bf("hello world optimized.bf")
 
-run_test(b"", b"Hello World!", 'Hello World optimized.bf output')
+run_test(b"", b"Hello World!\n", 'Hello World optimized.bf output')
 print("hello world optimized.bf test successful.")
 print()
 
