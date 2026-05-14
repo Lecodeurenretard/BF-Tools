@@ -277,12 +277,14 @@ impl Token {
                 }
             }
             
+            // single char instructions
             if let Some(token) = Token::tokenize_single_char(c) {
                 res.push(token);
                 i += 1;
                 continue;
             };
             
+            // EBF instructions
             if allow_ebf {
                 if let Some((tokens, end)) = Token::tokenize_added_instructions(&s, i) {
                     res.extend(tokens);
@@ -290,6 +292,8 @@ impl Token {
                     continue;
                 }
             }
+            
+            // configuration functions
             if allow_ebf && c == '#' {
                 let tok;
                 (tok, i) = Token::tokenize_config_function_name(&s, i);
@@ -298,9 +302,9 @@ impl Token {
                 if i >= s.len() {
                     panic!("Expecting parenthesis to call a configuration function.");
                 }
-                if let Some(pair) = Token::tokenize_arguments_and_parenthesis(&s, i) {
-                    res.extend(pair.0);
-                    i = pair.1;
+                if let Some((tokens, end)) = Token::tokenize_arguments_and_parenthesis(&s, i) {
+                    res.extend(tokens);
+                    i = end;
                     continue;
                 }
             }
@@ -668,6 +672,24 @@ mod tests {
     }
     
     #[test]
+    fn test_tokenize_ext_fun_args() {
+        let res = Token::tokenize(String::from("@12"), true);
+        assert_eq!(
+            res,
+            vec![Token::Goto, Token::IntLit(0)]
+        );
+        assert_eq!(res[1].get_wrapped_value().get_int(), Some(12));
+        
+        
+        let res = Token::tokenize(String::from("=+"), true);
+        assert_eq!(
+            res,
+            vec![Token::SetCell, Token::CharLit('\0')]
+        );
+        assert_eq!(res[1].get_wrapped_value().get_char(), Some('+'));
+    }
+    
+    #[test]
     fn test_tokenize() {
         let tokens = Token::test_tokenize("><+-,.[]", false);
         assert_eq!(
@@ -836,7 +858,7 @@ mod tests {
     }
     
     #[test]
-    fn test_reorder_wall1() {
+    fn test_reorder_despite_wall1() {
         let mut tokens = vec![
             Token::MemNext,
             Token::CellInc,
@@ -855,7 +877,7 @@ mod tests {
     }
     
     #[test]
-    fn test_reorder_wall2() {
+    fn test_reorder_despite_wall2() {
         let mut tokens = vec![
             Token::CellInc,
             Token::CellDec,

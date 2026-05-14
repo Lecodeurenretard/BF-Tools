@@ -63,14 +63,6 @@ impl BasicInstruction {
         }
         false
     }
-    
-    pub fn override_itself(&self) -> bool {
-        match self.kind {
-            Token::SetCell => true,
-            Token::Goto => true,
-            _ => false
-        }
-    }
 }
 
 impl TryFrom<Token> for BasicInstruction {
@@ -135,7 +127,7 @@ impl ExtendedBasicInstruction {
             return None;
         }
         if start + 1 >= vec.len() {
-            panic!("Expected an argument after instruction.")
+            panic!("Expected an argument after the `{}` instruction.", vec[start])
         }
         
         if vec[start] == Token::SetCell {
@@ -247,6 +239,7 @@ impl Loop {
 }
 
 impl Literal {
+    #[allow(unused)]
     pub fn is_int(&self) -> bool {
         match self {
             Literal::Int(_) => true,
@@ -269,7 +262,6 @@ impl Literal {
         }
     }
     
-    #[allow(unused)]
     pub fn get_char(&self) -> Option<char> {
         match self {
             Literal::Char(val) => Some(*val),
@@ -284,6 +276,7 @@ impl Literal {
         }
     }
     
+    #[allow(unused)]
     pub fn into_char(&self) -> Option<char> {
         match self {
             Literal::Int(v)   => {
@@ -402,7 +395,7 @@ impl Instruction {
                     Token::Write     => Instruction::Basic(BasicInstruction{ kind:  Token::Write,   count: 1 }),
                     Token::SetCell   => {
                         let Some((instr, end)) = ExtendedBasicInstruction::parse(&tokens, i) else {
-                            panic!("Bad extended instruction");
+                            unreachable!();
                         };
                         
                         i = end - 1;    // end points to the token after the instruction
@@ -410,7 +403,7 @@ impl Instruction {
                     },
                     Token::Goto      => {
                         let Some((instr, end)) = ExtendedBasicInstruction::parse(&tokens, i) else {
-                            panic!("Bad extended instruction");
+                            unreachable!();
                         };
                         
                         i = end - 1;    // end points to the token after the instruction
@@ -467,6 +460,8 @@ impl Instruction {
             _                                        => None
         }
     }
+    
+    #[allow(unused)]
     pub fn get_extended_basic_instruction_mut(&mut self) -> Option<&mut ExtendedBasicInstruction> {
         match self {
             Instruction::ExtBasic(b) => Some(b),
@@ -561,12 +556,11 @@ impl Reducer {
         let begin = self.position;
         self.position += 1;
         while self.position < self.instructions.len() {
-            let prev_instr = self.instructions[self.position - 1].get_extended_basic_instruction().unwrap();
             let Some(curr_instr) = self.current_instruction().get_extended_basic_instruction() else {
                 break;
             };
             
-            if prev_instr.get_kind() != curr_instr.get_kind() {
+            if first_instr.get_kind() != curr_instr.get_kind() {
                 break;
             }
             self.position += 1;
@@ -575,7 +569,7 @@ impl Reducer {
             return false;
         }
         
-        self.instructions.drain(begin..self.position);
+        self.instructions.drain(begin..self.position-1);
         true
     }
     
@@ -729,6 +723,83 @@ impl Reducer {
 mod tests {
     use super::*;
     
+    fn assert_eq_ext_instr(instruction1 : ExtendedBasicInstruction, instruction2 : ExtendedBasicInstruction) {
+        assert_eq!(instruction1.arg, instruction2.arg);
+        assert_eq!(instruction1.instr.kind, instruction2.instr.kind);
+        
+        assert_eq!(instruction1.instr.count, instruction2.instr.count);
+        assert_eq!(instruction1.instr.count, 1);  // For now every extended instructions overrride itself
+    }
+    
+    #[test]
+    #[should_panic(expected = "Index too high")]
+    fn test_ext_basic_parse_index_too_high() {
+        ExtendedBasicInstruction::parse(&Token::test_tokenize("=1 @20", true), 10);
+    }
+    
+    #[test]
+    #[should_panic(expected = "Expected an argument")]
+    fn test_ext_basic_parse_missing_argument() {
+        ExtendedBasicInstruction::parse(&vec![Token::Goto], 0);
+    }
+    
+    #[test]
+    fn test_ext_basic_parse() {
+        let tokens = vec![Token::Read, Token::SetCell, Token::IntLit(1)];
+        assert!(ExtendedBasicInstruction::parse(&tokens, 0).is_none());
+    }
+    
+    #[test]
+    #[should_panic(expected = "The number has to fit in a byte")]
+    fn test_ext_basic_parse_set_cell_arg_overflow() {
+        let tokens: Vec<Token> = vec![Token::SetCell, Token::IntLit(2048)];
+        ExtendedBasicInstruction::parse(&tokens, 0);
+    }
+    
+    #[test]
+    fn test_ext_basic_parse_set_cell() {
+        let tokens: Vec<Token> = vec![Token::SetCell, Token::IntLit(42)];
+        let Some((res, end)) = ExtendedBasicInstruction::parse(&tokens, 0) else {
+            panic!("ExtendedBasicInstruction::parse() returned None.");
+        };
+        assert_eq_ext_instr(
+            res,
+            ExtendedBasicInstruction::new(Token::SetCell, 1, Literal::Int(42))
+        );
+        assert_eq!(end, 2);
+        
+        
+        let tokens: Vec<Token> = vec![Token::SetCell, Token::CharLit('N')];
+        let Some((res, end)) = ExtendedBasicInstruction::parse(&tokens, 0) else {
+            panic!("ExtendedBasicInstruction::parse() returned None.");
+        };
+        assert_eq_ext_instr(
+            res,
+            ExtendedBasicInstruction::new(Token::SetCell, 1, Literal::Char('N'))
+        );
+        assert_eq!(end, 2);
+    }
+    
+    #[test]
+    #[should_panic(expected = "Expected cell number")]
+    fn test_ext_basic_parse_goto_bad_type() {
+        let tokens: Vec<Token> = vec![Token::Goto, Token::CharLit('2')];
+        ExtendedBasicInstruction::parse(&tokens, 0);
+    }
+    
+    #[test]
+    fn test_ext_basic_parse_goto() {
+        let tokens: Vec<Token> = vec![Token::Goto, Token::IntLit(69)];
+        let Some((res, end)) = ExtendedBasicInstruction::parse(&tokens, 0) else {
+            panic!("ExtendedBasicInstruction::parse() returned None.");
+        };
+        assert_eq_ext_instr(
+            res,
+            ExtendedBasicInstruction::new(Token::Goto, 1, Literal::Int(69))
+        );
+        assert_eq!(end, 2);
+    }
+    
     #[test]
     fn test_config_function_parse_good() {
         let (function, end) = ConfigFunction::parse_configuration_function(
@@ -843,10 +914,13 @@ mod tests {
     #[test]
     fn test_instruction_parse() {
         Instruction::parse_test("I love programming, brainfuck and punctuation. + something - someone", false);
+        Instruction::parse_test("@12=34 @1=2", true);
         Instruction::parse_test("[]", false);
         Instruction::parse_test("[+-,.]", false);
         Instruction::parse_test("[+-,.[]]", false);
+        Instruction::parse_test("[+-,.[=N>]@2]", true);
         Instruction::parse_test("#1()#2()[+-,.[]]", true);
+        Instruction::parse_test("#1()#23()[+-,.[=N>]@2]", true);
     }
     
     #[test]
@@ -917,12 +991,101 @@ mod tests {
     }
     
     #[test]
+    fn test_reducer_reduce_overriding_empty() {
+        assert_eq!(Reducer::new(vec![]).reduce_overriding(), false);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_overriding_no_reduce() {
+        let instructions = Instruction::parse_test("+-", true);
+        let mut reducer = Reducer::new(instructions);
+        
+        assert_eq!(reducer.reduce_overriding(), false);
+        assert_eq!(reducer.instructions.len(), 2);
+        // not verifying any further
+        
+        let instructions = Instruction::parse_test(".=1=2", true);
+        let mut reducer = Reducer::new(instructions);
+        
+        assert_eq!(reducer.reduce_overriding(), false);
+        assert_eq!(reducer.instructions.len(), 3);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_overriding_reduce_set_cell() {
+        let instructions = Instruction::parse_test("=1=2=3", true);
+        let mut reducer = Reducer::new(instructions);
+        
+        assert_eq!(reducer.reduce_overriding(), true);
+        assert_eq!(reducer.instructions.len(), 1);
+        assert_eq_ext_instr(
+            reducer.instructions[0].get_extended_basic_instruction().unwrap(),
+            ExtendedBasicInstruction::new(Token::SetCell, 1, Literal::Int(3))
+        );
+    }
+    
+    #[test]
+    fn test_reducer_reduce_overriding_reduce_goto() {
+        let instructions = Instruction::parse_test("@1@2@3", true);
+        let mut reducer = Reducer::new(instructions);
+        
+        assert_eq!(reducer.reduce_overriding(), true);
+        assert_eq!(reducer.instructions.len(), 1);
+        assert_eq_ext_instr(
+            reducer.instructions[0].get_extended_basic_instruction().unwrap(),
+            ExtendedBasicInstruction::new(Token::Goto, 1, Literal::Int(3))
+        );
+    }
+    
+    #[test]
+    fn test_reducer_reduce_overriding_reduce_mingled1() {
+        let instructions = Instruction::parse_test("@1=2@3", true);
+        let mut reducer = Reducer::new(instructions);
+        
+        assert_eq!(reducer.reduce_overriding(), false);
+        assert_eq!(reducer.instructions.len(), 3);
+        assert_eq_ext_instr(
+            reducer.instructions[0].get_extended_basic_instruction().unwrap(),
+            ExtendedBasicInstruction::new(Token::Goto, 1, Literal::Int(1))
+        );
+        assert_eq_ext_instr(
+            reducer.instructions[1].get_extended_basic_instruction().unwrap(),
+            ExtendedBasicInstruction::new(Token::SetCell, 1, Literal::Int(2))
+        );
+        assert_eq_ext_instr(
+            reducer.instructions[2].get_extended_basic_instruction().unwrap(),
+            ExtendedBasicInstruction::new(Token::Goto, 1, Literal::Int(3))
+        );
+    }
+    
+    #[test]
+    fn test_reducer_reduce_overriding_reduce_mingled2() {
+        let instructions = Instruction::parse_test("@1@4=2=7", true);
+        let mut reducer = Reducer::new(instructions);
+        
+        assert_eq!(reducer.reduce_overriding(), true);
+        assert_eq!(dbg!(&reducer.instructions).len(), 3);
+        assert_eq_ext_instr(
+            reducer.instructions[0].get_extended_basic_instruction().unwrap(),
+            ExtendedBasicInstruction::new(Token::Goto, 1, Literal::Int(4))
+        );
+        assert_eq_ext_instr(
+            reducer.instructions[1].get_extended_basic_instruction().unwrap(),
+            ExtendedBasicInstruction::new(Token::SetCell, 1, Literal::Int(2))
+        );
+        assert_eq_ext_instr(
+            reducer.instructions[2].get_extended_basic_instruction().unwrap(),
+            ExtendedBasicInstruction::new(Token::SetCell, 1, Literal::Int(7))
+        );
+    }
+    
+    #[test]
     fn test_reducer_reduce_consecutives_empty() {
         assert_eq!(Reducer::new(vec![]).reduce_consecutives(), false);
     }
     
     #[test]
-    fn test_reducer_reduce_consecutives_reduce() {
+    fn test_reducer_reduce_consecutives_reduce1() {
         let instructions = Instruction::parse_test("----", false);
         let mut reducer = Reducer::new(instructions);
         assert_eq!(reducer.reduce_consecutives(), true);
@@ -931,6 +1094,28 @@ mod tests {
         assert_eq!(reducer.instructions[1].get_basic_instruction().unwrap().count, 0);
         assert_eq!(reducer.instructions[2].get_basic_instruction().unwrap().count, 0);
         assert_eq!(reducer.instructions[3].get_basic_instruction().unwrap().count, 0);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_consecutives_reduce2() {
+        let instructions = Instruction::parse_test("++--++", false);
+        let mut reducer = Reducer::new(instructions);
+        assert_eq!(reducer.reduce_consecutives(), true);
+        assert_eq!(reducer.instructions.len(), 6);
+        assert_eq!(reducer.instructions[0].get_basic_instruction().unwrap().count, 2);
+        assert_eq!(reducer.instructions[1].get_basic_instruction().unwrap().count, 0);
+        assert_eq!(reducer.instructions[2].get_basic_instruction().unwrap().count, 1);
+        assert_eq!(reducer.instructions[3].get_basic_instruction().unwrap().count, 1);
+        assert_eq!(reducer.instructions[4].get_basic_instruction().unwrap().count, 1);
+        assert_eq!(reducer.instructions[5].get_basic_instruction().unwrap().count, 1);
+    }
+    
+    #[test]
+    fn test_reducer_reduce_consecutives_reduce3() {
+        let instructions = Instruction::parse_test("@1@2", true);
+        let mut reducer = Reducer::new(instructions);
+        assert_eq!(reducer.reduce_consecutives(), true);
+        assert_eq!(reducer.instructions.len(), 1);
     }
     
     #[test]

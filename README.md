@@ -36,6 +36,18 @@ Every character that is not any of the above is ignore as it is considered as co
 
 All character in curly braces `{}` is ignored regardless if it is an instruction or not.
 
+#### New instructions
+Those instructions require an argument passed without parentheses which is either an integer (max is 2<sup>32</sup>-1) or a character, in the latter case any non whitespace character can be passed **even the ones representing instructions**.
+
+
+> <b><code>=<i>int|char</i></code></b>  (also called "set cell")
+
+Set the current cell's value to this value. If a character is passed, the cell's value will be its ASCII code. If an interger is passed, it must be at most 255.
+
+> <b><code>@<i>int</i></code></b>  (also called "go to cell")
+
+Set points to the cell with the given number. Overflows are handled the same as in the `>` instruction.
+
 
 #### Configuration functions
 They are prebuilt, compilation-evalued functions. Their purpose is to setup the program.
@@ -85,6 +97,10 @@ Prevents the compiler to reduce tokens, see [the token reduction section](#token
 > **`--no-bound-checking`**  [flag]
 
 Prevents the compiler to generate bounds checking in the program. If not provided, at each `>` and `<` the programs checks if the memory pointer points out of bounds. 
+
+> **`--no-ebf`**  [flag]
+
+Compile the file as regular brainfuck (no comments nor added instructions).
 
 <!--- None found yet
 ### Undefined behaviors
@@ -142,9 +158,9 @@ After reduction:
 
 
 ## Building from source
-Just `cargo build`
+Just execute `cargo build`.
 
-To run tests you can run `cargo test` for unit tests and `python3 examples/test.py` to test the programs in [examples](examples).
+To run tests you can execute either `cargo test` for unit tests or `python3 examples/test.py` to test the programs in [examples](examples).
 
 
 <!--Neat site: https://esolangs.org/wiki/Talk:Brainfuck -->

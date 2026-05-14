@@ -38,7 +38,7 @@ pub struct Parameters {
     #[arg(long="no-bound-checking")]
     disable_bound_checking : bool,
     
-    /// Compile the program as a regular brainfuck program.
+    /// Compile the source as a regular brainfuck program.
     #[arg(long="no-ebf")]
     disable_ebf : bool,
 }
@@ -159,6 +159,9 @@ mod tests {
         assert!(file_is_brainfuck("src").is_err());
         assert!(file_is_brainfuck("src/main.rs").is_err());
         assert!(file_is_brainfuck("DoesNotExists.bf").is_err());
-        assert_eq!(file_is_brainfuck("examples/hello world.bf").unwrap(), String::from("examples/hello world.bf"));
+        assert!(file_is_brainfuck("DoesNotExists.ebf").is_err());
+        
+        assert_eq!(file_is_brainfuck("examples/hello world.bf"), Ok(String::from("examples/hello world.bf")));
+        assert_eq!(file_is_brainfuck("examples/hello world readable.ebf"), Ok(String::from("examples/hello world readable.ebf")));
     }
 }

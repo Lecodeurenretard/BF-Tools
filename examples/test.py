@@ -4,13 +4,14 @@ import os
 
 # Easier to see than just a file=sys.stderr argument
 def print_err(*values: object, sep: str = " ", end: str = "\n"): 
-	print(*values, sep=sep, end=end)
+	print(*values, sep=sep, end=end, file=sys.stderr)
 
 def compile_bf(source_file : str):
 	result = subprocess.run(
 		["cargo", "run", "--release", "--", source_file, "-o", "test"],
 		stdout=subprocess.DEVNULL,
 	)
+	
 	if result.returncode != 0:
 		print_err(f"Failed to compile {source_file}")
 		sys.exit(1)
@@ -68,6 +69,13 @@ run_test(b"", b"Hello World!\n", 'Hello World.bf output')
 print("hello world.bf test successful.")
 print()
 
+# --- hello world readable.bf ---
+print("Testing hello world readable.ebf")
+compile_bf("hello world readable.ebf")
+
+run_test(b"", b"Hello World!\n", 'Hello World.ebf output')
+print("hello world readable.ebf test successful.")
+print()
 
 # --- hello world optimized.bf ---
 print("Testing hello world optimized.bf")
