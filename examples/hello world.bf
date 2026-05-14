@@ -1,4 +1,5 @@
 {Basic hello world program, loads each character in memory and prints them all}
+{NOTE: If Extended Brainfuck is disabled, make sure to delete comments}
 
 Keeps the first cell to 0
 >

@@ -39,7 +39,7 @@ pub struct Parameters {
     disable_bound_checking : bool,
     
     /// Compile the program as a regular brainfuck program.
-    #[arg(long="no-extention")]
+    #[arg(long="no-ebf")]
     disable_ebf : bool,
 }
 
@@ -127,11 +127,10 @@ fn file_exists(s : &str) -> Result<String, String> {
 
 fn file_is_brainfuck(s : &str) -> Result<String, String> {
     let filename = file_exists(s)?;
-    if filename.ends_with(".bf") {
+    if filename.ends_with(".bf") || filename.ends_with(".ebf") {
         return Ok(String::from(s));
-    } else {
-        return Err(String::from("The file is not a brainfuck file (.bf)."));
     }
+    Err(String::from("The file is not a brainfuck file (.bf) nor an extended brainfuck file (.ebf)."))
 }
 
 

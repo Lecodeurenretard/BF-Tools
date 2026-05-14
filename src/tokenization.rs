@@ -17,6 +17,8 @@ pub enum Token {
     ParenClose,
     IntLit(u32),
     CharLit(char),
+    SetCell,
+    Goto,
 }
 
 #[derive(Debug)]
@@ -78,8 +80,10 @@ impl Token {
             Token::ConfigFunc(name) => name.clone(),
             Token::ParenOpen                 => String::from("("),
             Token::ParenClose                => String::from(")"),
-            Token::IntLit(i)         => i.to_string(),
+            Token::IntLit(i)           => i.to_string(),
             Token::CharLit(c)         => c.to_string(),
+            Token::SetCell                   => String::from("="),
+            Token::Goto                      => String::from("@"),
         }
     }
     
@@ -202,6 +206,52 @@ impl Token {
         Some((tokens, i + 1))
     }
     
+    pub fn is_lit(&self) -> bool {
+        match self {
+            Token::IntLit(_) => true,
+            Token::CharLit(_) => true,
+            _ => false
+        }
+    }
+    
+    pub fn tokenize_added_instructions(s : &Vec<char>, start : usize) -> Option<(Vec<Token>, usize)> {
+        if start >= s.len() {
+            unreachable!("Index too high");
+        }
+        
+        let mut tokens = Vec::new();
+        let mut i = start;
+        if s[start] == '=' {
+            tokens.push(Token::SetCell);
+            i = skip_whitespaces(s, i + 1);
+            if i >= s.len() {
+                panic!("Expected a literal after the `=` instruction.");
+            }
+            
+            let tok;
+            (tok, i) = Token::tokenize_literal(s, i);
+            tokens.push(tok);
+            
+            return Some((tokens, i));
+        }
+        
+        if s[start] == '@' {
+            tokens.push(Token::Goto);
+            i = skip_whitespaces(s, i + 1);
+            if i >= s.len() {
+                panic!("Expected an interger literal after the `@` instruction.");
+            }
+            
+            let tok;
+            (tok, i) = Token::tokenize_literal_int(s, i);
+            tokens.push(tok);
+            
+            return Some((tokens, i));
+        }
+        
+        None
+    }
+    
     pub fn tokenize(s : String, allow_ebf : bool) -> Vec<Token> {
         let s : Vec<char> = s.chars().collect();
         
@@ -211,7 +261,9 @@ impl Token {
         let mut i : usize = 0;
         while i < s.len() {
             let c = s[i];
-            if allow_ebf{
+            
+            // comments
+            if allow_ebf {
                 if c == '}' {
                     if !commented {
                         panic!("A comment was closed but never opened.")
@@ -231,6 +283,13 @@ impl Token {
                 continue;
             };
             
+            if allow_ebf {
+                if let Some((tokens, end)) = Token::tokenize_added_instructions(&s, i) {
+                    res.extend(tokens);
+                    i = end;
+                    continue;
+                }
+            }
             if allow_ebf && c == '#' {
                 let tok;
                 (tok, i) = Token::tokenize_config_function_name(&s, i);

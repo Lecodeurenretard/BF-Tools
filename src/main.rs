@@ -16,6 +16,9 @@ mod other;
 
 fn main() -> Result<(), Box<dyn Error>>{
     let arguments = Parameters::parse();
+    if arguments.get_disable_ebf() && arguments.get_input_file().ends_with(".ebf") {
+        panic!("Disabled extended brainfuck on an extended brainfuck file.");
+    }
     
     let contents = std::fs::read_to_string(arguments.get_input_file())
         .expect("Please provide a correct filename. You may also not have the necessary permissions.");
@@ -24,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>>{
     if !arguments.get_disable_reordering() {
         Token::reorder_opposites(&mut tokens);
     }
-        
+    
     let mut instructions = Instruction::parse(tokens);
     if !arguments.get_disable_simplification() {
         let mut reducer = parsing::Reducer::new(instructions);
@@ -43,6 +46,11 @@ fn main() -> Result<(), Box<dyn Error>>{
     )?;
     
     if arguments.get_compile_only() {
+        println!(
+            "Finished compiling `{}`, the generated assembly can be found at `{}`.",
+            arguments.get_input_file(),
+            output_file_asm,
+        );
         return Ok(());
     }
     let mut pgrm_output : Output;
@@ -59,8 +67,14 @@ fn main() -> Result<(), Box<dyn Error>>{
     
     
     if arguments.get_assemble_only() {
+        println!(
+            "Finished compiling and assembling `{}`, the generated object file can be found at `{}`.",
+            arguments.get_input_file(),
+            output_file_o,
+        );
         return Ok(());
     }
+    
     // link the object file with ld
     pgrm_output = Command::new("ld")
         .arg(&output_file_o)
@@ -80,11 +94,11 @@ fn main() -> Result<(), Box<dyn Error>>{
         Command::new("rm")
             .arg(&output_file_asm)
             .output()
-            .expect("Can't delete the object file.");
+            .expect("Can't delete the assembly file.");
     }
     
     println!(
-        "Finished compiling `{}`, the binary executable can be found at `{}`.",
+        "Finished compilation of `{}`, the binary executable can be found at `{}`.",
         arguments.get_input_file(),
         arguments.get_output_file(),
     );

@@ -1,0 +1,20 @@
+{Same logic as in hello world.bf but but EBF instructions.}
+
+>
+=H  >
+=e  >
+=l  >
+=l  >
+=o  >
+=32 >   space
+=W  >
+=o  >
+=r  >
+=l  >
+=d  >
+=!  >
+=10     new line
+
+
+[<]
+>[.>]

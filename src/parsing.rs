@@ -2,13 +2,20 @@ use crate::tokenization::Token;
 use std::cmp::Ordering;
 use crate::other::is_permutation;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BasicInstruction {
     kind : Token,
     count : usize,
 }
 
-#[derive(Clone)]
+
+#[derive(Clone, Debug)]
+pub struct ExtendedBasicInstruction {
+    instr : BasicInstruction,
+    arg : Literal
+}
+
+#[derive(Clone, Debug)]
 pub struct Loop {
     inner_instructions : Vec<Instruction>,
     id : usize,
@@ -20,16 +27,17 @@ pub enum Literal {
     Char(char),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ConfigFunction {
     name : String,
     args : Vec<Literal>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Instruction {
     Config(ConfigFunction),
     Basic(BasicInstruction),
+    ExtBasic(ExtendedBasicInstruction),
     Loop(Loop),
 }
 
@@ -55,6 +63,14 @@ impl BasicInstruction {
         }
         false
     }
+    
+    pub fn override_itself(&self) -> bool {
+        match self.kind {
+            Token::SetCell => true,
+            Token::Goto => true,
+            _ => false
+        }
+    }
 }
 
 impl TryFrom<Token> for BasicInstruction {
@@ -78,6 +94,91 @@ impl TryFrom<&Token> for BasicInstruction {
     
     fn try_from(value: &Token) -> Result<Self, Self::Error> {
         BasicInstruction::try_from(value.clone())
+    }
+}
+
+impl ExtendedBasicInstruction {
+    pub fn new(kind : Token, count : usize, arg : Literal) -> ExtendedBasicInstruction {
+        ExtendedBasicInstruction {
+            instr: BasicInstruction {
+                kind,
+                count,
+            },
+            arg,
+        }
+    }
+    
+    pub fn get_kind(&self) -> &Token {
+        self.instr.get_kind()
+    }
+    
+    pub fn get_count(&self) -> usize {
+        self.instr.get_count()
+    }
+    
+    pub fn get_arg(&self) -> Literal {
+        self.arg
+    }
+    
+    pub fn override_itself(&self) -> bool {
+        [
+            Token::SetCell,
+            Token::Goto,
+        ].contains(&self.instr.kind)
+    }
+    
+    pub fn parse(vec : &Vec<Token>, start : usize) -> Option<(ExtendedBasicInstruction, usize)> {
+        if start >= vec.len() {
+            unreachable!("Index too high");
+        }
+        if ![Token::SetCell, Token::Goto].contains(&vec[start]) {
+            return None;
+        }
+        if start + 1 >= vec.len() {
+            panic!("Expected an argument after instruction.")
+        }
+        
+        if vec[start] == Token::SetCell {
+            if !vec[start + 1].is_lit() {
+                panic!("Expected ASCII code or character after `=` instruction.");
+            }
+            
+            let lit = Literal::try_from(vec[start + 1].clone())
+                .unwrap();
+            
+            if lit.into_int() > u8::MAX.into() {
+                panic!("The number has to fit in a byte (max 255).");
+            }
+            
+            return Some((
+                ExtendedBasicInstruction::new(Token::SetCell, 1, lit),
+                start + 2
+            ));
+        }
+        
+        if vec[start] == Token::Goto {
+            if vec[start + 1] != Token::IntLit(0) {
+                panic!("Expected cell number after `@` instruction.");
+            }
+            
+            let lit = Literal::try_from(vec[start + 1].clone())
+                .unwrap();
+            
+            return Some((
+                ExtendedBasicInstruction::new(Token::Goto, 1, lit),
+                start + 2
+            ));
+        }
+        unreachable!()
+    }
+}
+
+impl From<BasicInstruction> for ExtendedBasicInstruction {
+    fn from(value: BasicInstruction) -> Self {
+        ExtendedBasicInstruction {
+            instr: value,
+            arg: Literal::Int(0),
+        }
     }
 }
 
@@ -175,6 +276,37 @@ impl Literal {
             _  => None
         }
     }
+    
+    pub fn into_int(&self) -> u32 {
+        match self {
+            Literal::Int(v)   => *v,
+            Literal::Char(v) => *v as u32,
+        }
+    }
+    
+    pub fn into_char(&self) -> Option<char> {
+        match self {
+            Literal::Int(v)   => {
+                if *v > u8::MAX.into() {
+                    return None;
+                }
+                Some(v.to_le_bytes()[0] as char)
+            },
+            Literal::Char(v) => Some(*v),
+        }
+    }
+}
+
+impl TryFrom<Token> for Literal {
+    type Error = &'static str;
+    
+    fn try_from(value: Token) -> Result<Self, Self::Error> {
+        match value {
+            Token::IntLit(v)   => Ok(Literal::Int(v)),
+            Token::CharLit(v) => Ok(Literal::Char(v)),
+            _ => Err("Not a literal.")
+        }
+    }
 }
 
 impl ConfigFunction {
@@ -268,6 +400,22 @@ impl Instruction {
                     Token::CellDec   => Instruction::Basic(BasicInstruction{ kind:  Token::CellDec, count: 1 }),
                     Token::Read      => Instruction::Basic(BasicInstruction{ kind:  Token::Read,    count: 1 }),
                     Token::Write     => Instruction::Basic(BasicInstruction{ kind:  Token::Write,   count: 1 }),
+                    Token::SetCell   => {
+                        let Some((instr, end)) = ExtendedBasicInstruction::parse(&tokens, i) else {
+                            panic!("Bad extended instruction");
+                        };
+                        
+                        i = end - 1;    // end points to the token after the instruction
+                        Instruction::ExtBasic(instr)
+                    },
+                    Token::Goto      => {
+                        let Some((instr, end)) = ExtendedBasicInstruction::parse(&tokens, i) else {
+                            panic!("Bad extended instruction");
+                        };
+                        
+                        i = end - 1;    // end points to the token after the instruction
+                        Instruction::ExtBasic(instr)
+                    },
                     Token::BracketOpen => {
                         let res = Loop::parse(&tokens, i, next_loop_id);
                         i = res.1;
@@ -302,6 +450,26 @@ impl Instruction {
     pub fn get_basic_instruction_mut(&mut self) -> Option<&mut BasicInstruction> {
         match self {
             Instruction::Basic(b) => Some(b),
+            _                                            => None
+        }
+    }
+    
+    pub fn is_extended_basic_instruction(&self) -> bool {
+        match self {
+            Instruction::ExtBasic(_) => true,
+            _                     => false
+        }
+    }
+    pub fn get_extended_basic_instruction(&self) -> Option<ExtendedBasicInstruction> {
+        match self {
+            Instruction::ExtBasic(b) => Some(b.clone()),
+            Instruction::Basic(b)            => Some(b.clone().into()),
+            _                                        => None
+        }
+    }
+    pub fn get_extended_basic_instruction_mut(&mut self) -> Option<&mut ExtendedBasicInstruction> {
+        match self {
+            Instruction::ExtBasic(b) => Some(b),
             _                                            => None
         }
     }
@@ -365,8 +533,8 @@ impl Reducer {
         }
         
         let mut pop_curr = false;
-        if let Some(curr_instr) = self.current_instruction().get_basic_instruction() {
-            if curr_instr.count == 0 {
+        if let Some(curr_instr) = self.current_instruction().get_extended_basic_instruction() {
+            if curr_instr.get_count() == 0 {
                 pop_curr = true;
             }
         }
@@ -378,6 +546,39 @@ impl Reducer {
         pop_curr
     }
     
+    fn reduce_overriding(&mut self) -> bool {
+        if self.position >= self.instructions.len() {
+            return false;
+        }
+        
+        let Some(first_instr) = self.current_instruction().get_extended_basic_instruction() else {
+            return false;
+        };
+        if !first_instr.override_itself() { 
+            return false;
+        }
+        
+        let begin = self.position;
+        self.position += 1;
+        while self.position < self.instructions.len() {
+            let prev_instr = self.instructions[self.position - 1].get_extended_basic_instruction().unwrap();
+            let Some(curr_instr) = self.current_instruction().get_extended_basic_instruction() else {
+                break;
+            };
+            
+            if prev_instr.get_kind() != curr_instr.get_kind() {
+                break;
+            }
+            self.position += 1;
+        }
+        if self.position - begin <= 1 {
+            return false;
+        }
+        
+        self.instructions.drain(begin..self.position);
+        true
+    }
+    
     fn reduce_consecutives(&mut self) -> bool {
         if self.position >= self.instructions.len() {
             return false;
@@ -387,9 +588,11 @@ impl Reducer {
         if self.current_instruction().is_loop() || self.current_instruction().is_configuration_function() {
             return false;
         }
-        
+        if self.current_instruction().is_extended_basic_instruction() {
+            return self.reduce_overriding()
+        }
         if !self.current_instruction().is_basic_instruction() {
-            unreachable!("An instruction is neither basic, a loop nor a configuration function.");
+            unreachable!("An instruction is neither (extended) basic, a loop nor a configuration function.");
         }
         
         let repeating_instruction = self.instructions[self.position]
@@ -403,7 +606,7 @@ impl Reducer {
             let Some(end_instruction) = self.instructions[end_pos].get_basic_instruction() else {
                 break;
             };
-            if end_instruction.kind != repeating_instruction.kind {
+            if end_instruction.get_kind() != repeating_instruction.get_kind() {
                 break;
             }
             end_pos += 1;
@@ -493,7 +696,6 @@ impl Reducer {
             
             self.position = 0;
             while self.position < self.instructions.len() {
-                
                 self.reduce_trivial();
                 if self.reduce_consecutives() {
                     at_least_one_change = true;
@@ -505,8 +707,8 @@ impl Reducer {
             
             self.position = 0;
             while self.position < self.instructions.len() {
-                
                 self.reduce_trivial();
+                
                 if self.reduce_opposites() {
                     at_least_one_change = true;
                     self.reduce_trivial();

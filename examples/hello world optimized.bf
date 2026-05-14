@@ -1,3 +1,5 @@
+{NOTE: If Extended Brainfuck is disabled, make sure to delete comments}
+
 +>-[>>+>+[++>-<<]-<+<+]>---.<<<<++.<<----..+++.>------.<<+.>.+++.------.>>-.<+.
 
 Shortest known hello world from this site: {http://inversed.ru/InvMem.htm#InvMem_7}

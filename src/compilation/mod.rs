@@ -1,4 +1,4 @@
-use crate::parsing::{BasicInstruction, Instruction, Loop};
+use crate::parsing::{BasicInstruction, ExtendedBasicInstruction, Instruction, Literal, Loop};
 use crate::tokenization::Token;
 
 pub struct Generator {
@@ -119,6 +119,37 @@ impl Generator {
         ), id=id)
     }
     
+    fn gen_set_cell(&self, arg : Literal) -> String {
+        let val : u8 = match arg.get_int() {
+            Some(v) => {
+                // checked for overflow while parsing
+                v as u8
+            },
+            None => {
+                if arg.get_char().is_none() {
+                    unreachable!()  // unimplemented type
+                }
+                arg.get_char().unwrap() as u8
+            }
+        };
+        
+        format!(
+            "\tmov byte ptr [rbx], {val}\n"
+        )
+    }
+    
+    fn gen_goto(&self, arg : Literal) -> String {
+        let Some(dest) = arg.get_int() else {
+            unreachable!();
+        };
+        
+        format!(concat!(
+            "\tmov rbx, r12\n",
+            "\tadd rbx, {}\n",
+        ), dest)
+        + &self.check_ptr(0)
+    }
+    
     fn predefined_functions(&self) -> String {
         format!(concat!(
             "runtime_error:\n",
@@ -146,6 +177,14 @@ impl Generator {
         }
     }
     
+    fn gen_ext_basic_instr(&self, instr : &ExtendedBasicInstruction) -> String {
+        match instr.get_kind() {
+            Token::SetCell => self.gen_set_cell(instr.get_arg()),
+            Token::Goto    => self.gen_goto(instr.get_arg()),
+            _              => unreachable!()
+        }
+    }
+    
     fn gen_loop(&self, instr : &Loop) -> String {
         let mut res : String;
         
@@ -170,10 +209,11 @@ impl Generator {
                     panic!("In function {}(): Wrong number of arguments, expected 1.", config_fun.get_name());
                 }
                 
-                if !config_fun.get_args()[0].is_int() {
-                    panic!("In function {}(): Wrong parameter type for argument 1, expected an integer.", config_fun.get_name());
-                }
-                self.cell_count = config_fun.get_args()[0].get_int().unwrap();
+                let first_arg = config_fun.get_args()[0];
+                self.cell_count = first_arg.get_int()
+                    .expect(&format!(
+                        "In function {}(): Wrong parameter type for argument 1, expected an integer.", config_fun.get_name()
+                    ));
                 continue;
             }
             
@@ -232,6 +272,10 @@ impl Generator {
     pub fn gen_instr(&self, instr : &Instruction) -> String {
         if let Some(basic) = instr.get_basic_instruction() {
             return self.gen_basic_instr(basic);
+        }
+        
+        if let Some(ext_basic) = instr.get_extended_basic_instruction() {
+            return self.gen_ext_basic_instr(&ext_basic);
         }
         
         if let Some(l) = instr.get_loop() {
