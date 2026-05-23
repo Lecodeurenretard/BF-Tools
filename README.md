@@ -2,9 +2,9 @@
 
 This repository contains multiple tools to code in Brainfuck (BF) all written in Ruse. At its final state it will have:
 - A compiler
-  - Compile to Unix x64 assembly
+  - Compile to Unix x64 assembly      (implemented)
   - Can possibly also compile to Wasm
-- An interpreter
+- An interpreter                      (implemented)
 - A VSCode extension
 
 ## The language
@@ -74,7 +74,25 @@ The number of cell the program can work with. Defaults to 128.
 - The read instruction (`,`) treats the EoF character as 0 (reading from a file is just this loop `[>,]`).
 
 ## Compiler usage
+The BF-Tools executable has currently two subcommands:
+- `compile`: Compile to x64 or executable.
+- `interpret`: Execute the code in real-time.
+
 ### Command-line arguments
+### Every subcommands
+> **`--no-ebf`**  [flag]
+
+Compile the file as regular brainfuck (no comments nor added instructions).
+
+> **`--no-token-reduction`**  [flag]
+
+Prevents the compiler to reduce instructions, see [the token reduction section](#token-reduction).
+
+> **`--no-token-reordering`**  [flag]
+
+Prevents the compiler to reorder tokens. While reducing, the compiler orders instructions such as the reductible ones are next to one another. The reductions can be done without reordering but it is less efficient. If `--no-token-reduction` is provided, this is implied.
+
+### `compile` specific
 > **`--output`** (`-o`)
 
 The path to the compiled executable's name, defaults to the input file's name with the `.bf` extention stripped. If "./output" is provided, "./output.asm", "./output.o" and "./output" will be overwritten, depending on other arguments "./output.asm" and "./output.o" might also be deleted.
@@ -91,17 +109,10 @@ Compile and assemble only, do not link.The generated assembly and object file ar
 
 Compile with debug symbols. Debug symbols allow tools like GDB to run the executable with debigging tools (breakpoints, source assembly, ...).
 
-> **`--no-token-reduction`**  [flag]
-
-Prevents the compiler to reduce tokens, see [the token reduction section](#token-reduction).
-
 > **`--no-bound-checking`**  [flag]
 
 Prevents the compiler to generate bounds checking in the program. If not provided, at each `>` and `<` the programs checks if the memory pointer points out of bounds. 
 
-> **`--no-ebf`**  [flag]
-
-Compile the file as regular brainfuck (no comments nor added instructions).
 
 <!--- None found yet
 ### Undefined behaviors
@@ -112,7 +123,7 @@ In order to lower file sizes and improve performance, the compiler can change th
 
 Token reduction consists in two ways:
 1. Run-length encode tokens.
-2. Cancel out instructructions that counter act eachother.
+2. Cancel out instructions that undo act eachother.
 	- For example, `+` and `-` are cancelled.
 
 The former is effective since BF programs tend to have a lot of duplicates.
