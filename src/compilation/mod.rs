@@ -7,10 +7,10 @@ pub struct Generator {
 }
 
 impl Generator {
-    pub fn new(enable_ebound_check : bool) -> Generator {
+    pub fn new(enable_bound_check : bool) -> Generator {
         Generator { 
             cell_count: 128,
-            bound_check: enable_ebound_check,
+            bound_check: enable_bound_check,
         }
     }
     
@@ -150,7 +150,7 @@ impl Generator {
         + &self.check_ptr(0)
     }
     
-    fn predefined_functions(&self) -> String {
+    fn starting_labels(&self) -> String {
         format!(concat!(
             "runtime_error:\n",
             "\tmov r8, rax\n",    // saves the exit code
@@ -254,7 +254,7 @@ impl Generator {
             // sets the memory pointer to the begining of the heap
             "\tmov rbx, r12\n\n",
         ),
-            functions=self.predefined_functions(),
+            functions=self.starting_labels(),
             nb_cells=self.cell_count,
             OoB=self.create_error("OoB", "The memory pointer is out of bounds."),
         )

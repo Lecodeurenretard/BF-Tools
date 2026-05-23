@@ -71,6 +71,7 @@ The number of cell the program can work with. Defaults to 128.
 - The memory is always initialzed to zero when starting program.
 - Every memory cell is stored as a byte.
 - Incrementing from a cell at 255 gives 0 and decrementing from 0 gives 255.
+- The read instruction (`,`) treats the EoF character as 0 (reading from a file is just this loop `[>,]`).
 
 ## Compiler usage
 ### Command-line arguments

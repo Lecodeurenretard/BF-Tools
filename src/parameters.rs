@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -7,58 +7,154 @@ pub struct Parameters {
     #[arg(value_parser = file_is_brainfuck)]
     input_file : String,
     
-    /// The name of the executable binary file produced, by default is the name of the input file without extention.
-    #[arg(short, long = "output")]
-    output_file : Option<String>,
+    #[clap(subcommand)]
+    subcommand : Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Compiles brainfuck to assembly then to an executable with as and ld.
+    Compile {
+        /// The name of the executable binary file produced, by default is the name of the input file without extention.
+        #[arg(short, long = "output")]
+        output_file : Option<String>,
+        
+        /// Compile only, do not assemble nor link. The generated assembly is not deleted.
+        #[arg(short='S')]
+        #[arg(group = "compilation_steps")]
+        compile_only : bool,
+        
+        /// Compile and assemble only, do not link. The generated assembly and object file are not deleted.
+        #[arg(short='c')]
+        #[arg(group = "compilation_steps")]
+        assemble_only : bool,
+        
+        /// Generate debug symbols for tools such as GDB.
+        #[arg(short='g', long="gen-debug")]
+        debug_symbols : bool,
+        
+        /// Prevent the compiler from reordering instructions while parsing.
+        #[arg(long="no-token-reordering")]
+        disable_reordering : bool,
+        
+        /// Prevent the compiler from simplifing the program.
+        #[arg(long="no-token-reduction")]
+        disable_simplification : bool,
+        
+        /// Prevent the compiler from generating bound checking code.
+        /// Exposes the program to undefined behaviors.
+        #[arg(long="no-bound-checking")]
+        disable_bound_checking : bool,
+        
+        /// Compile the source without any added functionnalities other that brainfuck doesn't provide.
+        #[arg(long="no-ebf")]
+        disable_ebf : bool,
+    },
     
-    /// Compile only, do not assemble nor link. The generated assembly is not deleted.
-    #[arg(short='S')]
-    #[arg(group = "compilation_steps")]
-    compile_only : bool,
+    /// Execute in real-time the brainfuck program.
+    Interpret {
+        /// Prevent the interpreter from reordering instructions while parsing.
+        #[arg(long="no-token-reordering")]
+        disable_reordering : bool,
+        
+        /// Prevent the interpreter from not executing no-ops.
+        #[arg(long="no-token-reduction")]
+        disable_simplification : bool,
+        
+        /// Interpret the source without any added functionnalities other that brainfuck doesn't provide.
+        #[arg(long="no-ebf")]
+        disable_ebf : bool,
+    }
+}
+
+impl Command {
+    #[cfg(test)]
+    pub fn test_new(subcmd : char, output : Option<&str>) -> Command {
+        match subcmd {
+            'c' => Command::Compile {
+                output_file: output.map(|s| String::from(s)),
+                compile_only: false,
+                assemble_only: false,
+                debug_symbols: false,
+                disable_reordering: false,
+                disable_simplification: false,
+                disable_bound_checking: false,
+                disable_ebf: false
+            },
+            
+            'i' => Command::Interpret {
+                disable_reordering: false,
+                disable_simplification: false,
+                disable_ebf: false,
+            },
+            
+            _ => unreachable!()
+        }
+    }
     
-    /// Compile and assemble only, do not link. The generated assembly and object file are not deleted.
-    #[arg(short='c')]
-    #[arg(group = "compilation_steps")]
-    assemble_only : bool,
+    pub fn get_output_file(&self) -> Option<&Option<String>> {
+        match self {
+            Command::Compile { output_file, ..} => Some(output_file),
+            _ => None
+        }
+    }
     
-    /// Generate debug symbols for tools such as GDB.
-    #[arg(short='g', long="gen-debug")]
-    debug_symbols : bool,
+    pub fn get_compile_only(&self) -> Option<bool> {
+        match self {
+            Command::Compile { compile_only, ..} => Some(*compile_only),
+            _ => None
+        }
+    }
     
-    /// Prevent the compiler to reorder instructions.
-    #[arg(long="no-token-reordering")]
-    disable_reordering : bool,
+    pub fn get_assemble_only(&self) -> Option<bool> {
+        match self {
+            Command::Compile { assemble_only, ..} => Some(*assemble_only),
+            _ => None
+        }
+    }
+
+    pub fn get_debug_symbols(&self) -> Option<bool> {
+        match self {
+            Command::Compile { debug_symbols, ..} => Some(*debug_symbols),
+            _ => None
+        }
+    }
     
-    /// Prevent the compiler to simplify the program.
-    #[arg(long="no-token-reduction")]
-    disable_simplification : bool,
+    pub fn get_disable_bound_checking(&self) -> Option<bool> {
+        match self {
+            Command::Compile { disable_bound_checking, ..} => Some(*disable_bound_checking),
+            _ => None
+        }
+    }
     
-    /// Prevent the compiler to generate bound checking code.
-    /// Exposes the program to undefined behaviors.
-    #[arg(long="no-bound-checking")]
-    disable_bound_checking : bool,
+    pub fn get_disable_reordering(&self) -> bool {
+        match self {
+            Command::Compile { disable_reordering, ..} => *disable_reordering,
+            Command::Interpret { disable_reordering, ..} => *disable_reordering,
+        }
+    }
     
-    /// Compile the source as a regular brainfuck program.
-    #[arg(long="no-ebf")]
-    disable_ebf : bool,
+    pub fn get_disable_simplification(&self) -> bool {
+        match self {
+            Command::Compile { disable_simplification, ..} => *disable_simplification,
+            Command::Interpret { disable_simplification, ..} => *disable_simplification,
+        }
+    }
+    
+    pub fn get_disable_ebf(&self) -> bool {
+        match self {
+            Command::Compile { disable_ebf, ..} => *disable_ebf,
+            Command::Interpret { disable_ebf, ..} => *disable_ebf,
+        }
+    }
 }
 
 impl Parameters {
     #[cfg(test)]
-    fn test_new(input : &str, output : Option<&str>) -> Parameters {
+    fn test_new(input : &str, command : char, output : Option<&str>) -> Parameters {
         Parameters {
             input_file: String::from(input),
-            output_file: match output {
-                Some(out) => Some(String::from(out)),
-                None => None
-            },
-            compile_only: false,
-            assemble_only: false,
-            debug_symbols: false,
-            disable_reordering: false,
-            disable_simplification: false,
-            disable_bound_checking: false,
-            disable_ebf: false,
+            subcommand: Command::test_new(command, output),
         }
     }
     
@@ -66,42 +162,69 @@ impl Parameters {
         self.input_file.clone()
     }
     
-    pub fn get_output_file(&self) -> String {
-        self.output_file.clone().unwrap_or(
-            self.input_file.rsplit_once(".")
+    pub fn get_output_file(&self) -> Option<String> {
+        Some(self.subcommand
+            .get_output_file()?
+            .clone()
+            .unwrap_or(
+            self.input_file
+                .rsplit_once(".")
                 .expect("The file has no '.' in it, the argument 'input_file' is not checked good enough.")
                 .0
                 .to_string()
-        )
+        ))
     }
     
     pub fn get_dbg_enabled(&self) -> bool {
-        self.debug_symbols
+        self.subcommand
+            .get_debug_symbols()
+            .unwrap_or(false)
     }
     
     pub fn get_compile_only(&self) -> bool {
-        self.compile_only
+        self.subcommand
+            .get_compile_only()
+            .unwrap_or(false)
     }
     
     pub fn get_assemble_only(&self) -> bool {
-        self.assemble_only
+        self.subcommand
+            .get_assemble_only()
+            .unwrap_or(false)
     }
     
     pub fn get_disable_reordering(&self) -> bool {
-        self.disable_reordering
+        self.subcommand.get_disable_reordering()
     }
     
     pub fn get_disable_simplification(&self) -> bool {
         // can't simplify without reordering
-        self.disable_simplification && self.disable_reordering
+        self.subcommand.get_disable_simplification()
+        && self.subcommand.get_disable_reordering()
     }
     
     pub fn get_disable_bound_checking(&self) -> bool {
-        self.disable_bound_checking
+        self.subcommand
+            .get_disable_bound_checking()
+            .unwrap_or(false)
     }
     
     pub fn get_disable_ebf(&self) -> bool {
-        self.disable_ebf
+        self.subcommand.get_disable_ebf()
+    }
+    
+    pub fn is_compilation(&self) -> bool {
+        match self.subcommand {
+            Command::Compile { .. } => true,
+            _ => false
+        }
+    }
+    
+    pub fn is_interpretation(&self) -> bool {
+        match self.subcommand {
+            Command::Interpret { .. } => true,
+            _ => false
+        }
     }
 }
 
@@ -140,11 +263,11 @@ mod tests {
     
     #[test]
     fn test_get_output() {
-        assert_eq!(Parameters::test_new("input.bf"        , None).get_output_file()      , String::from("input"));
-        assert_eq!(Parameters::test_new("input.bf.bf"     , None).get_output_file()      , String::from("input.bf"));
-        assert_eq!(Parameters::test_new("input.out.zip.bf", None).get_output_file()      , String::from("input.out.zip"));
-        assert_eq!(Parameters::test_new("input.bf", Some("out")).get_output_file()       , String::from("out"));
-        assert_eq!(Parameters::test_new("input.bf", Some("out.zip.bf")).get_output_file(), String::from("out.zip.bf"));
+        assert_eq!(Parameters::test_new("input.bf"        , 'c', None).get_output_file()      , Some(String::from("input")));
+        assert_eq!(Parameters::test_new("input.bf.bf"     , 'c', None).get_output_file()      , Some(String::from("input.bf")));
+        assert_eq!(Parameters::test_new("input.out.zip.bf", 'c', None).get_output_file()      , Some(String::from("input.out.zip")));
+        assert_eq!(Parameters::test_new("input.bf", 'c', Some("out")).get_output_file()       , Some(String::from("out")));
+        assert_eq!(Parameters::test_new("input.bf", 'c', Some("out.zip.bf")).get_output_file(), Some(String::from("out.zip.bf")));
     }
     
     #[test]
